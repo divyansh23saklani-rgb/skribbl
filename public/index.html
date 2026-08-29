@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
   <title>Skribbl Clone</title>
-  <link rel="stylesheet" href="style.css?v=11" />
+  <link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
   <!-- 1. Landing Screen -->
@@ -106,37 +106,21 @@
     </div>
   </div>
 
-  <!-- 5. Main Game Screen -->
+  <!-- 5. Main Game Screen Layout -->
   <div class="main-container hidden" id="gameScreen">
     
-    <!-- Mobile Tab Navigation Bar (Visible only on phones/small screens) -->
-    <div class="mobile-tabs-bar">
-      <button class="mobile-tab-btn active" id="tabGameBtn">🎨 Canvas</button>
-      <button class="mobile-tab-btn" id="tabChatBtn">💬 Chat</button>
-      <button class="mobile-tab-btn" id="tabScoresBtn">🏆 Scores</button>
+    <!-- Top Fixed Info Bar -->
+    <div class="game-header-bar">
+      <div class="round-badge" id="roundDisplay">R 1/3</div>
+      <div class="timer-badge" id="timerDisplay">60s</div>
+      <div class="word-hint-display" id="wordHint">Waiting...</div>
+      <div class="drawer-status" id="drawerStatus">Connecting...</div>
+      <button id="copyInviteBtn" title="Copy Link" class="copy-btn">📋 Link</button>
     </div>
 
-    <!-- Left: Leaderboard Sidebar -->
-    <div class="leaderboard-container" id="leaderboardSection">
-      <div class="leaderboard-header">
-        <span>Players</span>
-        <button id="copyInviteBtn" title="Copy Link" class="copy-btn">📋 Link</button>
-      </div>
-      <div class="room-id-tag" id="roomIdDisplay">Room: ------</div>
-      <div id="playerList" class="player-list"></div>
-    </div>
-
-    <!-- Center: Game Area -->
-    <div class="game-area" id="canvasSection">
-      <!-- Info Bar -->
-      <div class="game-header-bar">
-        <div class="round-badge" id="roundDisplay">R 1/3</div>
-        <div class="timer-badge" id="timerDisplay">60s</div>
-        <div class="word-hint-display" id="wordHint">Waiting...</div>
-        <div class="drawer-status" id="drawerStatus">Connecting...</div>
-      </div>
-
-      <!-- Toolbar with Fill, Undo & Redo -->
+    <!-- Center: Canvas Area -->
+    <div class="canvas-section">
+      <!-- Toolbar with Fill, Undo, Redo, Colors -->
       <div class="toolbar" id="toolbar">
         <div class="color-palette" id="colorPalette">
           <div class="color-box selected" style="background: #000000;" data-color="#000000"></div>
@@ -175,18 +159,29 @@
       </div>
     </div>
 
-    <!-- Right: Chat Box -->
-    <div class="chat-container" id="chatSection">
-      <div class="chat-header">Live Chat & Guesses</div>
-      <div id="chatMessages" class="chat-messages"></div>
-      <form id="chatForm" class="chat-input-area" onsubmit="return false;">
-        <input type="text" id="chatInput" placeholder="Type your guess here..." autocomplete="off" />
-        <button type="submit" id="sendBtn">Send</button>
-      </form>
+    <!-- Bottom Half Split: Leaderboard (Left) and Chat (Right) -->
+    <div class="bottom-split-section">
+      <!-- Leaderboard -->
+      <div class="leaderboard-container">
+        <div class="leaderboard-header">Players</div>
+        <div id="playerList" class="player-list"></div>
+      </div>
+
+      <!-- Live Chat Messages -->
+      <div class="chat-container">
+        <div class="chat-header">Live Chat & Guesses</div>
+        <div id="chatMessages" class="chat-messages"></div>
+      </div>
     </div>
+
+    <!-- Bottom Sticky Guess Input Bar -->
+    <form id="chatForm" class="chat-input-area" onsubmit="return false;">
+      <input type="text" id="chatInput" placeholder="Type your guess here..." autocomplete="off" />
+      <button type="submit" id="sendBtn">Send</button>
+    </form>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js?v=11"></script>
+  <script src="script.js?v=12"></script>
 </body>
 </html>
