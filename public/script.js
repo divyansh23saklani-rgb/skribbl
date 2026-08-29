@@ -492,6 +492,10 @@ socket.on('choose_word_prompt', (data) => {
 socket.on('selection_timer_tick', (data) => {
   if (modalTimer) modalTimer.textContent = `${data.timeLeft}s remaining`;
   if (timerDisplay) timerDisplay.textContent = `${data.timeLeft}s`;
+
+  if (data.timeLeft <= 5 && data.timeLeft > 0) {
+    SoundEffects.playTick();
+  }
 });
 
 socket.on('waiting_for_word', (data) => {
@@ -538,7 +542,8 @@ socket.on('hint_update', (data) => {
 
 socket.on('timer_update', (data) => {
   if (timerDisplay) timerDisplay.textContent = `${data.timeLeft}s`;
-  if (data.timeLeft <= 5 && data.timeLeft > 0) {
+
+  if (data.timeLeft <= 10 && data.timeLeft > 0) {
     SoundEffects.playTick();
   }
 });
