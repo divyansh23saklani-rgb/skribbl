@@ -18,17 +18,8 @@ const roundsSetting = document.getElementById('roundsSetting');
 const startGameBtn = document.getElementById('startGameBtn');
 const guestWaitNotice = document.getElementById('guestWaitNotice');
 
-// 2. Mobile Responsive Tab Elements
-const tabGameBtn = document.getElementById('tabGameBtn');
-const tabChatBtn = document.getElementById('tabChatBtn');
-const tabScoresBtn = document.getElementById('tabScoresBtn');
-const canvasSection = document.getElementById('canvasSection');
-const chatSection = document.getElementById('chatSection');
-const leaderboardSection = document.getElementById('leaderboardSection');
-
-// 3. Main Game Elements
+// 2. Main Game Elements
 const gameScreen = document.getElementById('gameScreen');
-const roomIdDisplay = document.getElementById('roomIdDisplay');
 const copyInviteBtn = document.getElementById('copyInviteBtn');
 const roundDisplay = document.getElementById('roundDisplay');
 const timerDisplay = document.getElementById('timerDisplay');
@@ -36,7 +27,7 @@ const wordHint = document.getElementById('wordHint');
 const drawerStatus = document.getElementById('drawerStatus');
 const playerList = document.getElementById('playerList');
 
-// 4. Canvas & Tools
+// 3. Canvas & Tools
 const canvas = document.getElementById('paintCanvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const brushSize = document.getElementById('brushSize');
@@ -49,7 +40,7 @@ const redoBtn = document.getElementById('redoBtn');
 const colorBoxes = document.querySelectorAll('.color-box');
 const toolbar = document.getElementById('toolbar');
 
-// 5. Modals
+// 4. Modals
 const wordModal = document.getElementById('wordModal');
 const modalTimer = document.getElementById('modalTimer');
 const wordChoicesContainer = document.getElementById('wordChoices');
@@ -57,7 +48,7 @@ const gameOverModal = document.getElementById('gameOverModal');
 const podiumList = document.getElementById('podiumList');
 const restartTimer = document.getElementById('restartTimer');
 
-// 6. Chat Elements
+// 5. Chat Elements
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatMessages = document.getElementById('chatMessages');
@@ -92,37 +83,6 @@ function restoreCanvasFromDataURL(dataUrl) {
   };
 }
 
-// Mobile Tab Switching System
-function showMobileTab(tab) {
-  if (window.innerWidth > 950) {
-    canvasSection.classList.remove('mobile-hidden');
-    chatSection.classList.remove('mobile-hidden');
-    leaderboardSection.classList.remove('mobile-hidden');
-    return;
-  }
-
-  [tabGameBtn, tabChatBtn, tabScoresBtn].forEach(b => b.classList.remove('active'));
-  canvasSection.classList.add('mobile-hidden');
-  chatSection.classList.add('mobile-hidden');
-  leaderboardSection.classList.add('mobile-hidden');
-
-  if (tab === 'game') {
-    tabGameBtn.classList.add('active');
-    canvasSection.classList.remove('mobile-hidden');
-  } else if (tab === 'chat') {
-    tabChatBtn.classList.add('active');
-    chatSection.classList.remove('mobile-hidden');
-  } else if (tab === 'scores') {
-    tabScoresBtn.classList.add('active');
-    leaderboardSection.classList.remove('mobile-hidden');
-  }
-}
-
-tabGameBtn.addEventListener('click', () => showMobileTab('game'));
-tabChatBtn.addEventListener('click', () => showMobileTab('chat'));
-tabScoresBtn.addEventListener('click', () => showMobileTab('scores'));
-window.addEventListener('resize', () => showMobileTab('game'));
-
 // URL Room Check
 const urlParams = new URLSearchParams(window.location.search);
 const roomParam = urlParams.get('room');
@@ -151,7 +111,6 @@ socket.on('joined_successfully', (data) => {
   landingModal.classList.add('hidden');
   currentRoomId = data.roomId;
   waitingRoomId.textContent = data.roomId;
-  roomIdDisplay.textContent = `Room: ${data.roomId}`;
 
   const newUrl = `${window.location.origin}${window.location.pathname}?room=${data.roomId}`;
   window.history.pushState({ path: newUrl }, '', newUrl);
@@ -159,7 +118,6 @@ socket.on('joined_successfully', (data) => {
   if (data.gameStarted) {
     gameScreen.classList.remove('hidden');
     waitingLobbyModal.classList.add('hidden');
-    showMobileTab('game');
   } else {
     waitingLobbyModal.classList.remove('hidden');
     gameScreen.classList.add('hidden');
@@ -217,7 +175,6 @@ socket.on('lobby_state_update', (data) => {
 socket.on('game_started', () => {
   waitingLobbyModal.classList.add('hidden');
   gameScreen.classList.remove('hidden');
-  showMobileTab('game');
 });
 
 function copyInviteLink(btn) {
@@ -254,7 +211,7 @@ colorBoxes.forEach((box) => {
   });
 });
 
-// Flood Fill Algorithm
+// Flood Fill (Paint Bucket)
 function hexToRgba(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) c = c.split('').map(x => x + x).join('');
@@ -315,7 +272,7 @@ function floodFill(startX, startY, fillColorHex) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Precise Mobile/Touch & Desktop Coordinate Mapper
+// Coordinate Mapper for Touch & Mouse
 function getCanvasPos(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
@@ -434,7 +391,7 @@ socket.on('flood_fill', (data) => floodFill(data.x, data.y, data.color));
 socket.on('restore_canvas_state', (dataUrl) => restoreCanvasFromDataURL(dataUrl));
 socket.on('clear', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
 
-// --- Game Logic Listeners ---
+// --- Round & Turn Listeners ---
 socket.on('round_info', (data) => {
   roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
 });
@@ -487,10 +444,6 @@ socket.on('round_start', (data) => {
   toolbar.style.pointerEvents = canDraw ? 'auto' : 'none';
   chatInput.placeholder = canDraw ? "You're drawing, can't guess!" : 'Type your guess here...';
   chatInput.disabled = canDraw;
-
-  if (window.innerWidth <= 950) {
-    showMobileTab(canDraw ? 'game' : 'game');
-  }
 });
 
 socket.on('drawer_word', (data) => {
@@ -562,7 +515,7 @@ socket.on('leaderboard_update', (data) => {
   });
 });
 
-// --- Chat Form ---
+// --- Chat Handling ---
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
