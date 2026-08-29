@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Skribbl Clone</title>
+  <link rel="stylesheet" href="style.css?v=10" />
+</head>
+<body>
+  <!-- 1. Landing Screen -->
+  <div id="landingModal" class="lobby-modal">
+    <div class="lobby-card">
+      <h1>🎨 Skribbl Clone</h1>
+      <p class="lobby-subtitle">Draw and guess with your friends!</p>
+      
+      <div class="input-group">
+        <label for="usernameInput">Your Name</label>
+        <input type="text" id="usernameInput" placeholder="Enter your username..." maxlength="15" autofocus />
+      </div>
+
+      <div class="lobby-actions">
+        <button id="createRoomBtn" class="lobby-btn primary-btn">Create Private Room</button>
+        <div class="divider"><span>OR</span></div>
+        <div class="join-box">
+          <input type="text" id="roomCodeInput" placeholder="Room Code" maxlength="10" />
+          <button id="joinRoomBtn" class="lobby-btn secondary-btn">Join Room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Room Waiting Lobby Screen -->
+  <div id="waitingLobbyModal" class="lobby-modal hidden">
+    <div class="lobby-card wide-card">
+      <div class="waiting-header">
+        <h2>Room: <span id="waitingRoomId">------</span></h2>
+        <button id="lobbyCopyInviteBtn" class="copy-btn">📋 Copy Invite Link</button>
+      </div>
+
+      <div class="waiting-body">
+        <div class="waiting-players-section">
+          <h3>Joined Players (<span id="waitingPlayerCount">0</span>)</h3>
+          <div id="waitingPlayerList" class="waiting-player-list"></div>
+        </div>
+
+        <div class="waiting-settings-section">
+          <h3>Game Settings</h3>
+          
+          <div class="setting-item">
+            <label for="drawTimeSetting">Draw Time</label>
+            <select id="drawTimeSetting" class="setting-select">
+              <option value="30">30 Seconds</option>
+              <option value="45">45 Seconds</option>
+              <option value="60" selected>60 Seconds</option>
+              <option value="75">75 Seconds</option>
+              <option value="90">90 Seconds</option>
+              <option value="120">120 Seconds</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="selectionTimeSetting">Word Choice Time</label>
+            <select id="selectionTimeSetting" class="setting-select">
+              <option value="10" selected>10 Seconds</option>
+              <option value="15">15 Seconds</option>
+              <option value="20">20 Seconds</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="roundsSetting">Rounds</label>
+            <select id="roundsSetting" class="setting-select">
+              <option value="2">2 Rounds</option>
+              <option value="3" selected>3 Rounds</option>
+              <option value="4">4 Rounds</option>
+              <option value="5">5 Rounds</option>
+              <option value="6">6 Rounds</option>
+            </select>
+          </div>
+
+          <div class="host-status-box" id="hostStatusBox">
+            <button id="startGameBtn" class="lobby-btn primary-btn">Start Game</button>
+            <div id="guestWaitNotice" class="guest-notice hidden">Waiting for host to start the game...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Word Choice Modal Overlay -->
+  <div id="wordModal" class="word-modal hidden">
+    <div class="modal-card">
+      <h2>Choose a Word to Draw</h2>
+      <div class="modal-timer" id="modalTimer">10s remaining</div>
+      <div id="wordChoices" class="word-choice-buttons"></div>
+    </div>
+  </div>
+
+  <!-- 4. Game Over Podium Modal Overlay -->
+  <div id="gameOverModal" class="game-over-modal hidden">
+    <div class="podium-card">
+      <h2>🏆 Game Over! 🏆</h2>
+      <p class="podium-subtitle">Final Match Results</p>
+      <div id="podiumList" class="podium-list"></div>
+      <div class="restart-timer" id="restartTimer">New game starting in 10s...</div>
+    </div>
+  </div>
+
+  <!-- 5. Main Game Screen -->
+  <div class="main-container hidden" id="gameScreen">
+    <!-- Left: Leaderboard -->
+    <div class="leaderboard-container">
+      <div class="leaderboard-header">
+        <span>Players</span>
+        <button id="copyInviteBtn" title="Copy Invite Link" class="copy-btn">📋 Invite</button>
+      </div>
+      <div class="room-id-tag" id="roomIdDisplay">Room: ------</div>
+      <div id="playerList" class="player-list"></div>
+    </div>
+
+    <!-- Center: Game Area -->
+    <div class="game-area">
+      <!-- Info Bar -->
+      <div class="game-header-bar">
+        <div class="round-badge" id="roundDisplay">Round 1 of 3</div>
+        <div class="timer-badge" id="timerDisplay">60s</div>
+        <div class="word-hint-display" id="wordHint">Waiting for players...</div>
+        <div class="drawer-status" id="drawerStatus">Connecting...</div>
+      </div>
+
+      <!-- Toolbar with Fill, Undo & Redo -->
+      <div class="toolbar" id="toolbar">
+        <div class="color-palette" id="colorPalette">
+          <div class="color-box selected" style="background: #000000;" data-color="#000000"></div>
+          <div class="color-box" style="background: #ffffff;" data-color="#ffffff"></div>
+          <div class="color-box" style="background: #c1c1c1;" data-color="#c1c1c1"></div>
+          <div class="color-box" style="background: #4f4f4f;" data-color="#4f4f4f"></div>
+          <div class="color-box" style="background: #ef130b;" data-color="#ef130b"></div>
+          <div class="color-box" style="background: #740b07;" data-color="#740b07"></div>
+          <div class="color-box" style="background: #ff7100;" data-color="#ff7100"></div>
+          <div class="color-box" style="background: #c23800;" data-color="#c23800"></div>
+          <div class="color-box" style="background: #ffe400;" data-color="#ffe400"></div>
+          <div class="color-box" style="background: #e8a200;" data-color="#e8a200"></div>
+          <div class="color-box" style="background: #00cc00;" data-color="#00cc00"></div>
+          <div class="color-box" style="background: #005510;" data-color="#005510"></div>
+          <div class="color-box" style="background: #00b2ff;" data-color="#00b2ff"></div>
+          <div class="color-box" style="background: #0040a4;" data-color="#0040a4"></div>
+          <div class="color-box" style="background: #a800ff;" data-color="#a800ff"></div>
+          <div class="color-box" style="background: #a0522d;" data-color="#a0522d"></div>
+        </div>
+
+        <button id="penBtn" class="tool-btn active" type="button">✏️ Pen</button>
+        <button id="fillBtn" class="tool-btn" type="button">🪣 Fill</button>
+        <button id="eraserBtn" class="tool-btn" type="button">🧽 Eraser</button>
+        <button id="undoBtn" class="tool-btn" type="button" title="Undo (Ctrl+Z)">↩️</button>
+        <button id="redoBtn" class="tool-btn" type="button" title="Redo (Ctrl+Y)">↪️</button>
+
+        <label class="brush-control">Size: <input type="range" id="brushSize" min="2" max="40" value="6" /></label>
+        <button id="clearBtn" class="tool-btn danger" type="button">Clear</button>
+      </div>
+
+      <div class="canvas-wrapper">
+        <canvas id="paintCanvas" width="600" height="450"></canvas>
+      </div>
+    </div>
+
+    <!-- Right: Chat Box -->
+    <div class="chat-container">
+      <div class="chat-header">Live Chat & Guesses</div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <form id="chatForm" class="chat-input-area" onsubmit="return false;">
+        <input type="text" id="chatInput" placeholder="Type your guess here..." autocomplete="off" />
+        <button type="submit" id="sendBtn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js?v=10"></script>
+</body>
+</html>
