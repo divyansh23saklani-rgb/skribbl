@@ -20,6 +20,7 @@ const guestWaitNotice = document.getElementById('guestWaitNotice');
 
 // 2. Main Game Elements
 const gameScreen = document.getElementById('gameScreen');
+const roomIdDisplay = document.getElementById('roomIdDisplay');
 const copyInviteBtn = document.getElementById('copyInviteBtn');
 const roundDisplay = document.getElementById('roundDisplay');
 const timerDisplay = document.getElementById('timerDisplay');
@@ -57,12 +58,48 @@ let isDrawing = false;
 let prevX = 0;
 let prevY = 0;
 let currentColor = '#000000';
-let activeTool = 'pen';
+let activeTool = 'pen'; // 'pen', 'fill', 'eraser'
 let canDraw = false;
 let currentRoomId = '';
 let isHost = false;
 
-// Undo / Redo Stacks
+// SoundEffects
+// --- Custom Sound Effects Engine ---
+const SoundEffects = {
+  correct: new Audio('/audio/correct.mp3'),
+  tick: new Audio('/audio/timetick.mp3'),
+  draw: new Audio('/audio/draw.mp3'),
+  join: new Audio('/audio/joining.mp3'),
+  leave: new Audio('/audio/leave.mp3'),
+  everyoneGuessed: new Audio('/audio/everyone or you guessed correctly.mp3'),
+  noOneGuessed: new Audio('/audio/nooneoryouguesscorrectly.mp3'),
+
+  play(audioInstance, volume = 0.5) {
+    if (!audioInstance) return;
+    audioInstance.volume = volume;
+    audioInstance.currentTime = 0;
+    audioInstance.play().catch((err) => {
+      console.warn('Audio play blocked until first user interaction:', err);
+    });
+  },
+
+  playCorrect() { this.play(this.correct, 0.6); },
+  playTick() { this.play(this.tick, 0.4); },
+  playDraw() { this.play(this.draw, 0.6); },
+  playJoin() { this.play(this.join, 0.5); },
+  playLeave() { this.play(this.leave, 0.5); },
+  playEveryoneGuessed() { this.play(this.everyoneGuessed, 0.7); },
+  playNoOneGuessed() { this.play(this.noOneGuessed, 0.6); }
+};
+
+// Pre-unlock all audio elements on initial user click or tap
+window.addEventListener('click', () => {
+  Object.values(SoundEffects).forEach((item) => {
+    if (item instanceof Audio) item.load();
+  });
+}, { once: true });
+
+// Undo / Redo History Stacks
 let undoStack = [];
 let redoStack = [];
 const MAX_HISTORY = 15;
@@ -71,7 +108,7 @@ function saveCanvasState() {
   if (!canDraw) return;
   if (undoStack.length >= MAX_HISTORY) undoStack.shift();
   undoStack.push(canvas.toDataURL());
-  redoStack = [];
+  redoStack = []; // Clear redo stack on new action
 }
 
 function restoreCanvasFromDataURL(dataUrl) {
@@ -83,7 +120,7 @@ function restoreCanvasFromDataURL(dataUrl) {
   };
 }
 
-// URL Room Check
+// Check URL for ?room=CODE
 const urlParams = new URLSearchParams(window.location.search);
 const roomParam = urlParams.get('room');
 if (roomParam) {
@@ -111,6 +148,7 @@ socket.on('joined_successfully', (data) => {
   landingModal.classList.add('hidden');
   currentRoomId = data.roomId;
   waitingRoomId.textContent = data.roomId;
+  roomIdDisplay.textContent = `Room: ${data.roomId}`;
 
   const newUrl = `${window.location.origin}${window.location.pathname}?room=${data.roomId}`;
   window.history.pushState({ path: newUrl }, '', newUrl);
@@ -136,6 +174,7 @@ function emitSettingsUpdate() {
 drawTimeSetting.addEventListener('change', emitSettingsUpdate);
 selectionTimeSetting.addEventListener('change', emitSettingsUpdate);
 roundsSetting.addEventListener('change', emitSettingsUpdate);
+
 startGameBtn.addEventListener('click', () => socket.emit('start_game_request'));
 
 socket.on('lobby_state_update', (data) => {
@@ -189,6 +228,7 @@ function copyInviteLink(btn) {
 lobbyCopyInviteBtn.addEventListener('click', () => copyInviteLink(lobbyCopyInviteBtn));
 copyInviteBtn.addEventListener('click', () => copyInviteLink(copyInviteBtn));
 
+// Tool Selection
 function selectTool(tool) {
   activeTool = tool;
   [penBtn, fillBtn, eraserBtn].forEach(b => b.classList.remove('active'));
@@ -211,7 +251,7 @@ colorBoxes.forEach((box) => {
   });
 });
 
-// Flood Fill (Paint Bucket)
+// --- Flood Fill (Paint Bucket) Algorithm ---
 function hexToRgba(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) c = c.split('').map(x => x + x).join('');
@@ -263,6 +303,7 @@ function floodFill(startX, startY, fillColorHex) {
     data[dataIdx + 2] = fillRgba[2];
     data[dataIdx + 3] = fillRgba[3];
 
+    // Check 4 adjacent pixels
     if (x + 1 < width && !seen[y * width + (x + 1)] && matchesTarget((y * width + (x + 1)) * 4)) queue.push([x + 1, y]);
     if (x - 1 >= 0 && !seen[y * width + (x - 1)] && matchesTarget((y * width + (x - 1)) * 4)) queue.push([x - 1, y]);
     if (y + 1 < height && !seen[(y + 1) * width + x] && matchesTarget(((y + 1) * width + x) * 4)) queue.push([x, y + 1]);
@@ -272,7 +313,7 @@ function floodFill(startX, startY, fillColorHex) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Coordinate Mapper for Touch & Mouse
+// Unified Pointer Position Helper (Mouse + Touch Support)
 function getCanvasPos(e) {
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
@@ -287,6 +328,7 @@ function getCanvasPos(e) {
   };
 }
 
+// Drawing Start Event (Mouse & Touch)
 function handlePointerDown(e) {
   if (!canDraw) return;
   const pos = getCanvasPos(e);
@@ -304,6 +346,7 @@ function handlePointerDown(e) {
   prevY = pos.y;
 }
 
+// Drawing Move Event (Mouse & Touch)
 function handlePointerMove(e) {
   if (!isDrawing || !canDraw || activeTool === 'fill') return;
   if (e.cancelable) e.preventDefault();
@@ -329,10 +372,12 @@ function handlePointerUp() {
   isDrawing = false;
 }
 
+// Event Listeners for Desktop Mouse
 canvas.addEventListener('mousedown', handlePointerDown);
 canvas.addEventListener('mousemove', handlePointerMove);
 window.addEventListener('mouseup', handlePointerUp);
 
+// Event Listeners for Mobile & iPad Touch
 canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
 canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
 window.addEventListener('touchend', handlePointerUp);
@@ -350,6 +395,7 @@ function drawLine({ prevX, prevY, currentX, currentY, color, size }) {
   ctx.closePath();
 }
 
+// Undo & Redo Handlers
 function performUndo() {
   if (!canDraw || undoStack.length === 0) return;
   redoStack.push(canvas.toDataURL());
@@ -369,6 +415,7 @@ function performRedo() {
 undoBtn.addEventListener('click', performUndo);
 redoBtn.addEventListener('click', performRedo);
 
+// Keyboard Shortcuts (Ctrl+Z and Ctrl+Y)
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'z') {
     e.preventDefault();
@@ -386,14 +433,15 @@ clearBtn.addEventListener('click', () => {
   socket.emit('clear');
 });
 
+// Socket Receivers for Real-time Actions
 socket.on('draw', (data) => drawLine(data));
 socket.on('flood_fill', (data) => floodFill(data.x, data.y, data.color));
 socket.on('restore_canvas_state', (dataUrl) => restoreCanvasFromDataURL(dataUrl));
 socket.on('clear', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
 
-// --- Round & Turn Listeners ---
+// --- Round & Turn Handlers ---
 socket.on('round_info', (data) => {
-  roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
+  roundDisplay.textContent = `Round ${data.currentRound} of ${data.totalRounds}`;
 });
 
 socket.on('choose_word_prompt', (data) => {
@@ -421,8 +469,8 @@ socket.on('selection_timer_tick', (data) => {
 
 socket.on('waiting_for_word', (data) => {
   wordModal.classList.add('hidden');
-  wordHint.textContent = 'CHOOSING...';
-  drawerStatus.textContent = `${data.drawerName} is choosing...`;
+  wordHint.textContent = 'CHOOSING WORD...';
+  drawerStatus.textContent = `${data.drawerName} is choosing a word...`;
   timerDisplay.textContent = `${data.timeLeft}s`;
   toolbar.style.opacity = '0.4';
   toolbar.style.pointerEvents = 'none';
@@ -430,9 +478,10 @@ socket.on('waiting_for_word', (data) => {
 });
 
 socket.on('round_start', (data) => {
+    SoundEffects.playDraw();
   wordModal.classList.add('hidden');
   gameOverModal.classList.add('hidden');
-  roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
+  roundDisplay.textContent = `Round ${data.currentRound} of ${data.totalRounds}`;
   canDraw = data.drawerId === socket.id;
 
   undoStack = [];
@@ -456,11 +505,20 @@ socket.on('hint_update', (data) => {
 
 socket.on('timer_update', (data) => {
   timerDisplay.textContent = `${data.timeLeft}s`;
+  if (data.timeLeft <= 10 && data.timeLeft > 0) {
+    SoundEffects.playTick();
+  }
 });
 
 socket.on('round_end', (data) => {
   wordHint.textContent = data.word.toUpperCase();
   wordModal.classList.add('hidden');
+
+  if (data.reason.includes('Everyone guessed')) {
+    SoundEffects.playEveryoneGuessed();
+  } else {
+    SoundEffects.playNoOneGuessed();
+  }
 });
 
 // --- Game Over Podium ---
@@ -469,7 +527,7 @@ socket.on('game_over', (data) => {
   gameOverModal.classList.remove('hidden');
   podiumList.innerHTML = '';
 
-  const medals = ['🥇 1st', '🥈 2nd', '🥉 3rd'];
+  const medals = ['🥇 1st Place', '🥈 2nd Place', '🥉 3rd Place'];
   const rankClasses = ['rank-1', 'rank-2', 'rank-3'];
 
   data.winners.forEach((p, idx) => {
@@ -482,7 +540,7 @@ socket.on('game_over', (data) => {
   let count = 10;
   const restartInterval = setInterval(() => {
     count--;
-    restartTimer.textContent = `New game in ${count}s...`;
+    restartTimer.textContent = `New game starting in ${count}s...`;
     if (count <= 0) {
       clearInterval(restartInterval);
       gameOverModal.classList.add('hidden');
@@ -490,7 +548,7 @@ socket.on('game_over', (data) => {
   }, 1000);
 });
 
-// --- Leaderboard Sync ---
+// --- In-Game Leaderboard Sync ---
 socket.on('leaderboard_update', (data) => {
   if (!playerList) return;
   playerList.innerHTML = '';
@@ -515,7 +573,7 @@ socket.on('leaderboard_update', (data) => {
   });
 });
 
-// --- Chat Handling ---
+// --- Chat & Close Guess Alert ---
 chatForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = chatInput.value.trim();
@@ -538,9 +596,15 @@ socket.on('chat_message', (data) => {
   msgEl.classList.add('message');
 
   if (data.isCorrect) {
+    SoundEffects.playCorrect();
     msgEl.classList.add('correct');
     msgEl.textContent = data.text;
   } else if (data.isSystem) {
+    if (data.text.includes('joined the room')) {
+      SoundEffects.playJoin();
+    } else if (data.text.includes('left the room')) {
+      SoundEffects.playLeave();
+    }
     msgEl.classList.add('system');
     msgEl.textContent = data.text;
   } else {
