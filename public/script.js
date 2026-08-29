@@ -20,7 +20,6 @@ const guestWaitNotice = document.getElementById('guestWaitNotice');
 
 // 2. Main Game Elements
 const gameScreen = document.getElementById('gameScreen');
-const roomIdDisplay = document.getElementById('roomIdDisplay');
 const copyInviteBtn = document.getElementById('copyInviteBtn');
 const roundDisplay = document.getElementById('roundDisplay');
 const timerDisplay = document.getElementById('timerDisplay');
@@ -30,7 +29,7 @@ const playerList = document.getElementById('playerList');
 
 // 3. Canvas & Tools
 const canvas = document.getElementById('paintCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
 const brushSize = document.getElementById('brushSize');
 const clearBtn = document.getElementById('clearBtn');
 const penBtn = document.getElementById('penBtn');
@@ -58,29 +57,38 @@ let isDrawing = false;
 let prevX = 0;
 let prevY = 0;
 let currentColor = '#000000';
-let activeTool = 'pen'; // 'pen', 'fill', 'eraser'
+let activeTool = 'pen';
 let canDraw = false;
 let currentRoomId = '';
 let isHost = false;
 
-// SoundEffects
-// --- Custom Sound Effects Engine ---
+// Safe Sound Effects Engine (Graceful fallback if audio files are missing)
+const safeAudio = (src) => {
+  try {
+    const a = new Audio(encodeURI(src));
+    a.preload = 'auto';
+    return a;
+  } catch (e) {
+    return null;
+  }
+};
+
 const SoundEffects = {
-  correct: new Audio('/audio/correct.mp3'),
-  tick: new Audio('/audio/timetick.mp3'),
-  draw: new Audio('/audio/draw.mp3'),
-  join: new Audio('/audio/joining.mp3'),
-  leave: new Audio('/audio/leave.mp3'),
-  everyoneGuessed: new Audio('/audio/everyone or you guessed correctly.mp3'),
-  noOneGuessed: new Audio('/audio/nooneoryouguesscorrectly.mp3'),
+  correct: safeAudio('/audio/correct.mp3'),
+  tick: safeAudio('/audio/timetick.mp3'),
+  draw: safeAudio('/audio/draw.mp3'),
+  join: safeAudio('/audio/joining.mp3'),
+  leave: safeAudio('/audio/leave.mp3'),
+  everyoneGuessed: safeAudio('/audio/everyone_guessed.mp3'),
+  noOneGuessed: safeAudio('/audio/nooneoryouguesscorrectly.mp3'),
 
   play(audioInstance, volume = 0.5) {
     if (!audioInstance) return;
-    audioInstance.volume = volume;
-    audioInstance.currentTime = 0;
-    audioInstance.play().catch((err) => {
-      console.warn('Audio play blocked until first user interaction:', err);
-    });
+    try {
+      audioInstance.volume = volume;
+      audioInstance.currentTime = 0;
+      audioInstance.play().catch(() => {});
+    } catch (err) {}
   },
 
   playCorrect() { this.play(this.correct, 0.6); },
@@ -92,26 +100,26 @@ const SoundEffects = {
   playNoOneGuessed() { this.play(this.noOneGuessed, 0.6); }
 };
 
-// Pre-unlock all audio elements on initial user click or tap
 window.addEventListener('click', () => {
   Object.values(SoundEffects).forEach((item) => {
-    if (item instanceof Audio) item.load();
+    if (item && item.load) try { item.load(); } catch (e) {}
   });
 }, { once: true });
 
-// Undo / Redo History Stacks
+// Undo / Redo Stacks
 let undoStack = [];
 let redoStack = [];
 const MAX_HISTORY = 15;
 
 function saveCanvasState() {
-  if (!canDraw) return;
+  if (!canDraw || !canvas) return;
   if (undoStack.length >= MAX_HISTORY) undoStack.shift();
   undoStack.push(canvas.toDataURL());
-  redoStack = []; // Clear redo stack on new action
+  redoStack = [];
 }
 
 function restoreCanvasFromDataURL(dataUrl) {
+  if (!ctx || !canvas) return;
   const img = new Image();
   img.src = dataUrl;
   img.onload = () => {
@@ -120,126 +128,145 @@ function restoreCanvasFromDataURL(dataUrl) {
   };
 }
 
-// Check URL for ?room=CODE
-const urlParams = new URLSearchParams(window.location.search);
-const roomParam = urlParams.get('room');
-if (roomParam) {
-  roomCodeInput.value = roomParam.trim().toUpperCase();
-}
+// Check room code in URL parameter
+try {
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomParam = urlParams.get('room');
+  if (roomParam && roomCodeInput) {
+    roomCodeInput.value = roomParam.trim().toUpperCase();
+  }
+} catch (e) {}
 
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 function enterRoom(roomId) {
-  const username = usernameInput.value.trim() || 'Player';
+  const username = (usernameInput && usernameInput.value.trim()) || 'Player';
   currentRoomId = roomId.toUpperCase();
   socket.emit('join_room', { roomId: currentRoomId, username });
 }
 
-createRoomBtn.addEventListener('click', () => enterRoom(generateRoomCode()));
-joinRoomBtn.addEventListener('click', () => {
-  const code = roomCodeInput.value.trim();
-  if (!code) return alert('Please enter a room code!');
-  enterRoom(code);
-});
+if (createRoomBtn) {
+  createRoomBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    enterRoom(generateRoomCode());
+  });
+}
+
+if (joinRoomBtn) {
+  joinRoomBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    const code = roomCodeInput ? roomCodeInput.value.trim() : '';
+    if (!code) return alert('Please enter a room code!');
+    enterRoom(code);
+  });
+}
 
 socket.on('joined_successfully', (data) => {
-  landingModal.classList.add('hidden');
+  if (landingModal) landingModal.classList.add('hidden');
   currentRoomId = data.roomId;
-  waitingRoomId.textContent = data.roomId;
-  roomIdDisplay.textContent = `Room: ${data.roomId}`;
+  if (waitingRoomId) waitingRoomId.textContent = data.roomId;
 
-  const newUrl = `${window.location.origin}${window.location.pathname}?room=${data.roomId}`;
-  window.history.pushState({ path: newUrl }, '', newUrl);
+  try {
+    const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?room=${data.roomId}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+  } catch (err) {}
 
   if (data.gameStarted) {
-    gameScreen.classList.remove('hidden');
-    waitingLobbyModal.classList.add('hidden');
+    if (gameScreen) gameScreen.classList.remove('hidden');
+    if (waitingLobbyModal) waitingLobbyModal.classList.add('hidden');
   } else {
-    waitingLobbyModal.classList.remove('hidden');
-    gameScreen.classList.add('hidden');
+    if (waitingLobbyModal) waitingLobbyModal.classList.remove('hidden');
+    if (gameScreen) gameScreen.classList.add('hidden');
   }
 });
 
 function emitSettingsUpdate() {
   if (!isHost) return;
   socket.emit('update_settings', {
-    drawTime: drawTimeSetting.value,
-    selectionTime: selectionTimeSetting.value,
-    rounds: roundsSetting.value
+    drawTime: drawTimeSetting ? drawTimeSetting.value : 60,
+    selectionTime: selectionTimeSetting ? selectionTimeSetting.value : 10,
+    rounds: roundsSetting ? roundsSetting.value : 3
   });
 }
 
-drawTimeSetting.addEventListener('change', emitSettingsUpdate);
-selectionTimeSetting.addEventListener('change', emitSettingsUpdate);
-roundsSetting.addEventListener('change', emitSettingsUpdate);
-
-startGameBtn.addEventListener('click', () => socket.emit('start_game_request'));
+if (drawTimeSetting) drawTimeSetting.addEventListener('change', emitSettingsUpdate);
+if (selectionTimeSetting) selectionTimeSetting.addEventListener('change', emitSettingsUpdate);
+if (roundsSetting) roundsSetting.addEventListener('change', emitSettingsUpdate);
+if (startGameBtn) startGameBtn.addEventListener('click', () => socket.emit('start_game_request'));
 
 socket.on('lobby_state_update', (data) => {
   isHost = data.hostId === socket.id;
-  waitingPlayerCount.textContent = data.players.length;
-  waitingPlayerList.innerHTML = '';
+  if (waitingPlayerCount) waitingPlayerCount.textContent = data.players.length;
+  if (waitingPlayerList) {
+    waitingPlayerList.innerHTML = '';
+    data.players.forEach((p) => {
+      const badge = document.createElement('div');
+      badge.classList.add('waiting-player-badge');
+      if (p.id === data.hostId) badge.classList.add('is-host');
 
-  data.players.forEach((p) => {
-    const badge = document.createElement('div');
-    badge.classList.add('waiting-player-badge');
-    if (p.id === data.hostId) badge.classList.add('is-host');
+      const hostTag = p.id === data.hostId ? ' 👑 Host' : '';
+      const youTag = p.id === socket.id ? ' (You)' : '';
 
-    const hostTag = p.id === data.hostId ? ' 👑 Host' : '';
-    const youTag = p.id === socket.id ? ' (You)' : '';
+      badge.innerHTML = `<span>${p.name}${youTag}</span><span style="color:#e67e22;font-weight:bold;">${hostTag}</span>`;
+      waitingPlayerList.appendChild(badge);
+    });
+  }
 
-    badge.innerHTML = `<span>${p.name}${youTag}</span><span style="color:#e67e22;font-weight:bold;">${hostTag}</span>`;
-    waitingPlayerList.appendChild(badge);
-  });
+  if (drawTimeSetting) {
+    drawTimeSetting.value = data.settings.drawTime;
+    drawTimeSetting.disabled = !isHost;
+  }
+  if (selectionTimeSetting) {
+    selectionTimeSetting.value = data.settings.selectionTime;
+    selectionTimeSetting.disabled = !isHost;
+  }
+  if (roundsSetting) {
+    roundsSetting.value = data.settings.rounds;
+    roundsSetting.disabled = !isHost;
+  }
 
-  drawTimeSetting.value = data.settings.drawTime;
-  selectionTimeSetting.value = data.settings.selectionTime;
-  roundsSetting.value = data.settings.rounds;
-
-  drawTimeSetting.disabled = !isHost;
-  selectionTimeSetting.disabled = !isHost;
-  roundsSetting.disabled = !isHost;
-
-  if (isHost) {
-    startGameBtn.classList.remove('hidden');
-    guestWaitNotice.classList.add('hidden');
-  } else {
-    startGameBtn.classList.add('hidden');
-    guestWaitNotice.classList.remove('hidden');
+  if (startGameBtn && guestWaitNotice) {
+    if (isHost) {
+      startGameBtn.classList.remove('hidden');
+      guestWaitNotice.classList.add('hidden');
+    } else {
+      startGameBtn.classList.add('hidden');
+      guestWaitNotice.classList.remove('hidden');
+    }
   }
 });
 
 socket.on('game_started', () => {
-  waitingLobbyModal.classList.add('hidden');
-  gameScreen.classList.remove('hidden');
+  if (waitingLobbyModal) waitingLobbyModal.classList.add('hidden');
+  if (gameScreen) gameScreen.classList.remove('hidden');
 });
 
 function copyInviteLink(btn) {
-  const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${currentRoomId}`;
+  if (!btn) return;
+  const inviteUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?room=${currentRoomId}`;
   navigator.clipboard.writeText(inviteUrl).then(() => {
     const prev = btn.textContent;
     btn.textContent = '✅ Copied!';
     setTimeout(() => { btn.textContent = prev; }, 2000);
-  });
+  }).catch(() => {});
 }
 
-lobbyCopyInviteBtn.addEventListener('click', () => copyInviteLink(lobbyCopyInviteBtn));
-copyInviteBtn.addEventListener('click', () => copyInviteLink(copyInviteBtn));
+if (lobbyCopyInviteBtn) lobbyCopyInviteBtn.addEventListener('click', () => copyInviteLink(lobbyCopyInviteBtn));
+if (copyInviteBtn) copyInviteBtn.addEventListener('click', () => copyInviteLink(copyInviteBtn));
 
-// Tool Selection
 function selectTool(tool) {
   activeTool = tool;
-  [penBtn, fillBtn, eraserBtn].forEach(b => b.classList.remove('active'));
-  if (tool === 'pen') penBtn.classList.add('active');
-  if (tool === 'fill') fillBtn.classList.add('active');
-  if (tool === 'eraser') eraserBtn.classList.add('active');
+  [penBtn, fillBtn, eraserBtn].forEach(b => { if (b) b.classList.remove('active'); });
+  if (tool === 'pen' && penBtn) penBtn.classList.add('active');
+  if (tool === 'fill' && fillBtn) fillBtn.classList.add('active');
+  if (tool === 'eraser' && eraserBtn) eraserBtn.classList.add('active');
 }
 
-penBtn.addEventListener('click', () => selectTool('pen'));
-fillBtn.addEventListener('click', () => selectTool('fill'));
-eraserBtn.addEventListener('click', () => selectTool('eraser'));
+if (penBtn) penBtn.addEventListener('click', () => selectTool('pen'));
+if (fillBtn) fillBtn.addEventListener('click', () => selectTool('fill'));
+if (eraserBtn) eraserBtn.addEventListener('click', () => selectTool('eraser'));
 
 colorBoxes.forEach((box) => {
   box.addEventListener('click', () => {
@@ -251,7 +278,7 @@ colorBoxes.forEach((box) => {
   });
 });
 
-// --- Flood Fill (Paint Bucket) Algorithm ---
+// Flood Fill Algorithm
 function hexToRgba(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) c = c.split('').map(x => x + x).join('');
@@ -260,6 +287,7 @@ function hexToRgba(hex) {
 }
 
 function floodFill(startX, startY, fillColorHex) {
+  if (!ctx || !canvas) return;
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imgData.data;
   const width = canvas.width;
@@ -303,7 +331,6 @@ function floodFill(startX, startY, fillColorHex) {
     data[dataIdx + 2] = fillRgba[2];
     data[dataIdx + 3] = fillRgba[3];
 
-    // Check 4 adjacent pixels
     if (x + 1 < width && !seen[y * width + (x + 1)] && matchesTarget((y * width + (x + 1)) * 4)) queue.push([x + 1, y]);
     if (x - 1 >= 0 && !seen[y * width + (x - 1)] && matchesTarget((y * width + (x - 1)) * 4)) queue.push([x - 1, y]);
     if (y + 1 < height && !seen[(y + 1) * width + x] && matchesTarget(((y + 1) * width + x) * 4)) queue.push([x, y + 1]);
@@ -313,8 +340,9 @@ function floodFill(startX, startY, fillColorHex) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Unified Pointer Position Helper (Mouse + Touch Support)
+// Pointer & Touch Events
 function getCanvasPos(e) {
+  if (!canvas) return { x: 0, y: 0 };
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -328,7 +356,6 @@ function getCanvasPos(e) {
   };
 }
 
-// Drawing Start Event (Mouse & Touch)
 function handlePointerDown(e) {
   if (!canDraw) return;
   const pos = getCanvasPos(e);
@@ -346,7 +373,6 @@ function handlePointerDown(e) {
   prevY = pos.y;
 }
 
-// Drawing Move Event (Mouse & Touch)
 function handlePointerMove(e) {
   if (!isDrawing || !canDraw || activeTool === 'fill') return;
   if (e.cancelable) e.preventDefault();
@@ -358,7 +384,7 @@ function handlePointerMove(e) {
     currentX: pos.x,
     currentY: pos.y,
     color: activeTool === 'eraser' ? '#ffffff' : currentColor,
-    size: brushSize.value
+    size: brushSize ? brushSize.value : 6
   };
 
   drawLine(strokeData);
@@ -372,18 +398,19 @@ function handlePointerUp() {
   isDrawing = false;
 }
 
-// Event Listeners for Desktop Mouse
-canvas.addEventListener('mousedown', handlePointerDown);
-canvas.addEventListener('mousemove', handlePointerMove);
-window.addEventListener('mouseup', handlePointerUp);
+if (canvas) {
+  canvas.addEventListener('mousedown', handlePointerDown);
+  canvas.addEventListener('mousemove', handlePointerMove);
+  window.addEventListener('mouseup', handlePointerUp);
 
-// Event Listeners for Mobile & iPad Touch
-canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
-canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
-window.addEventListener('touchend', handlePointerUp);
-window.addEventListener('touchcancel', handlePointerUp);
+  canvas.addEventListener('touchstart', handlePointerDown, { passive: false });
+  canvas.addEventListener('touchmove', handlePointerMove, { passive: false });
+  window.addEventListener('touchend', handlePointerUp);
+  window.addEventListener('touchcancel', handlePointerUp);
+}
 
 function drawLine({ prevX, prevY, currentX, currentY, color, size }) {
+  if (!ctx) return;
   ctx.beginPath();
   ctx.moveTo(prevX, prevY);
   ctx.lineTo(currentX, currentY);
@@ -395,9 +422,8 @@ function drawLine({ prevX, prevY, currentX, currentY, color, size }) {
   ctx.closePath();
 }
 
-// Undo & Redo Handlers
 function performUndo() {
-  if (!canDraw || undoStack.length === 0) return;
+  if (!canDraw || undoStack.length === 0 || !canvas) return;
   redoStack.push(canvas.toDataURL());
   const prevState = undoStack.pop();
   restoreCanvasFromDataURL(prevState);
@@ -405,17 +431,16 @@ function performUndo() {
 }
 
 function performRedo() {
-  if (!canDraw || redoStack.length === 0) return;
+  if (!canDraw || redoStack.length === 0 || !canvas) return;
   undoStack.push(canvas.toDataURL());
   const nextState = redoStack.pop();
   restoreCanvasFromDataURL(nextState);
   socket.emit('restore_canvas_state', nextState);
 }
 
-undoBtn.addEventListener('click', performUndo);
-redoBtn.addEventListener('click', performRedo);
+if (undoBtn) undoBtn.addEventListener('click', performUndo);
+if (redoBtn) redoBtn.addEventListener('click', performRedo);
 
-// Keyboard Shortcuts (Ctrl+Z and Ctrl+Y)
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'z') {
     e.preventDefault();
@@ -426,129 +451,138 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-clearBtn.addEventListener('click', () => {
-  if (!canDraw) return;
-  saveCanvasState();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  socket.emit('clear');
-});
+if (clearBtn) {
+  clearBtn.addEventListener('click', () => {
+    if (!canDraw || !ctx || !canvas) return;
+    saveCanvasState();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    socket.emit('clear');
+  });
+}
 
-// Socket Receivers for Real-time Actions
 socket.on('draw', (data) => drawLine(data));
 socket.on('flood_fill', (data) => floodFill(data.x, data.y, data.color));
 socket.on('restore_canvas_state', (dataUrl) => restoreCanvasFromDataURL(dataUrl));
-socket.on('clear', () => ctx.clearRect(0, 0, canvas.width, canvas.height));
+socket.on('clear', () => { if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); });
 
-// --- Round & Turn Handlers ---
+// Turn & Round Listeners
 socket.on('round_info', (data) => {
-  roundDisplay.textContent = `Round ${data.currentRound} of ${data.totalRounds}`;
+  if (roundDisplay) roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
 });
 
 socket.on('choose_word_prompt', (data) => {
-  gameOverModal.classList.add('hidden');
-  wordModal.classList.remove('hidden');
-  modalTimer.textContent = `${data.timeLeft}s remaining`;
-  wordChoicesContainer.innerHTML = '';
-
-  data.words.forEach((w) => {
-    const btn = document.createElement('button');
-    btn.classList.add('word-btn');
-    btn.textContent = w;
-    btn.onclick = () => {
-      socket.emit('select_word', w);
-      wordModal.classList.add('hidden');
-    };
-    wordChoicesContainer.appendChild(btn);
-  });
+  if (gameOverModal) gameOverModal.classList.add('hidden');
+  if (wordModal) wordModal.classList.remove('hidden');
+  if (modalTimer) modalTimer.textContent = `${data.timeLeft}s remaining`;
+  if (wordChoicesContainer) {
+    wordChoicesContainer.innerHTML = '';
+    data.words.forEach((w) => {
+      const btn = document.createElement('button');
+      btn.classList.add('word-btn');
+      btn.textContent = w;
+      btn.onclick = () => {
+        socket.emit('select_word', w);
+        if (wordModal) wordModal.classList.add('hidden');
+      };
+      wordChoicesContainer.appendChild(btn);
+    });
+  }
 });
 
 socket.on('selection_timer_tick', (data) => {
-  modalTimer.textContent = `${data.timeLeft}s remaining`;
-  timerDisplay.textContent = `${data.timeLeft}s`;
+  if (modalTimer) modalTimer.textContent = `${data.timeLeft}s remaining`;
+  if (timerDisplay) timerDisplay.textContent = `${data.timeLeft}s`;
 });
 
 socket.on('waiting_for_word', (data) => {
-  wordModal.classList.add('hidden');
-  wordHint.textContent = 'CHOOSING WORD...';
-  drawerStatus.textContent = `${data.drawerName} is choosing a word...`;
-  timerDisplay.textContent = `${data.timeLeft}s`;
-  toolbar.style.opacity = '0.4';
-  toolbar.style.pointerEvents = 'none';
+  if (wordModal) wordModal.classList.add('hidden');
+  if (wordHint) wordHint.textContent = 'CHOOSING...';
+  if (drawerStatus) drawerStatus.textContent = `${data.drawerName} is choosing...`;
+  if (timerDisplay) timerDisplay.textContent = `${data.timeLeft}s`;
+  if (toolbar) {
+    toolbar.style.opacity = '0.4';
+    toolbar.style.pointerEvents = 'none';
+  }
   canDraw = false;
 });
 
 socket.on('round_start', (data) => {
-    SoundEffects.playDraw();
-  wordModal.classList.add('hidden');
-  gameOverModal.classList.add('hidden');
-  roundDisplay.textContent = `Round ${data.currentRound} of ${data.totalRounds}`;
+  SoundEffects.playDraw();
+  if (wordModal) wordModal.classList.add('hidden');
+  if (gameOverModal) gameOverModal.classList.add('hidden');
+  if (roundDisplay) roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
   canDraw = data.drawerId === socket.id;
 
   undoStack = [];
   redoStack = [];
 
-  drawerStatus.textContent = canDraw ? 'You are Drawing!' : `${data.drawerName} is drawing`;
-  wordHint.textContent = data.hint;
-  toolbar.style.opacity = canDraw ? '1' : '0.4';
-  toolbar.style.pointerEvents = canDraw ? 'auto' : 'none';
-  chatInput.placeholder = canDraw ? "You're drawing, can't guess!" : 'Type your guess here...';
-  chatInput.disabled = canDraw;
+  if (drawerStatus) drawerStatus.textContent = canDraw ? 'You are Drawing!' : `${data.drawerName} is drawing`;
+  if (wordHint) wordHint.textContent = data.hint;
+  if (toolbar) {
+    toolbar.style.opacity = canDraw ? '1' : '0.4';
+    toolbar.style.pointerEvents = canDraw ? 'auto' : 'none';
+  }
+  if (chatInput) {
+    chatInput.placeholder = canDraw ? "You're drawing, can't guess!" : 'Type your guess here...';
+    chatInput.disabled = canDraw;
+  }
 });
 
 socket.on('drawer_word', (data) => {
-  wordHint.textContent = data.word.toUpperCase();
+  if (wordHint) wordHint.textContent = data.word.toUpperCase();
 });
 
 socket.on('hint_update', (data) => {
-  if (!canDraw) wordHint.textContent = data.hint;
+  if (!canDraw && wordHint) wordHint.textContent = data.hint;
 });
 
 socket.on('timer_update', (data) => {
-  timerDisplay.textContent = `${data.timeLeft}s`;
-  if (data.timeLeft <= 10 && data.timeLeft > 0) {
+  if (timerDisplay) timerDisplay.textContent = `${data.timeLeft}s`;
+  if (data.timeLeft <= 5 && data.timeLeft > 0) {
     SoundEffects.playTick();
   }
 });
 
 socket.on('round_end', (data) => {
-  wordHint.textContent = data.word.toUpperCase();
-  wordModal.classList.add('hidden');
+  if (wordHint) wordHint.textContent = data.word.toUpperCase();
+  if (wordModal) wordModal.classList.add('hidden');
 
-  if (data.reason.includes('Everyone guessed')) {
+  if (data.reason && data.reason.includes('Everyone guessed')) {
     SoundEffects.playEveryoneGuessed();
   } else {
     SoundEffects.playNoOneGuessed();
   }
 });
 
-// --- Game Over Podium ---
+// Game Over Podium
 socket.on('game_over', (data) => {
-  wordModal.classList.add('hidden');
-  gameOverModal.classList.remove('hidden');
-  podiumList.innerHTML = '';
+  if (wordModal) wordModal.classList.add('hidden');
+  if (gameOverModal) gameOverModal.classList.remove('hidden');
+  if (podiumList) {
+    podiumList.innerHTML = '';
+    const medals = ['🥇 1st', '🥈 2nd', '🥉 3rd'];
+    const rankClasses = ['rank-1', 'rank-2', 'rank-3'];
 
-  const medals = ['🥇 1st Place', '🥈 2nd Place', '🥉 3rd Place'];
-  const rankClasses = ['rank-1', 'rank-2', 'rank-3'];
-
-  data.winners.forEach((p, idx) => {
-    const row = document.createElement('div');
-    row.classList.add('podium-row', rankClasses[idx] || 'rank-3');
-    row.innerHTML = `<span>${medals[idx] || `#${idx + 1}`}: ${p.name}</span><span>${p.score} pts</span>`;
-    podiumList.appendChild(row);
-  });
+    data.winners.forEach((p, idx) => {
+      const row = document.createElement('div');
+      row.classList.add('podium-row', rankClasses[idx] || 'rank-3');
+      row.innerHTML = `<span>${medals[idx] || `#${idx + 1}`}: ${p.name}</span><span>${p.score} pts</span>`;
+      podiumList.appendChild(row);
+    });
+  }
 
   let count = 10;
   const restartInterval = setInterval(() => {
     count--;
-    restartTimer.textContent = `New game starting in ${count}s...`;
+    if (restartTimer) restartTimer.textContent = `New game in ${count}s...`;
     if (count <= 0) {
       clearInterval(restartInterval);
-      gameOverModal.classList.add('hidden');
+      if (gameOverModal) gameOverModal.classList.add('hidden');
     }
   }, 1000);
 });
 
-// --- In-Game Leaderboard Sync ---
+// Leaderboard Sync
 socket.on('leaderboard_update', (data) => {
   if (!playerList) return;
   playerList.innerHTML = '';
@@ -573,17 +607,21 @@ socket.on('leaderboard_update', (data) => {
   });
 });
 
-// --- Chat & Close Guess Alert ---
-chatForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (!text) return;
+// Chat Handlers
+if (chatForm) {
+  chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!chatInput) return;
+    const text = chatInput.value.trim();
+    if (!text) return;
 
-  socket.emit('send_message', text);
-  chatInput.value = '';
-});
+    socket.emit('send_message', text);
+    chatInput.value = '';
+  });
+}
 
 socket.on('close_guess_notice', (data) => {
+  if (!chatMessages) return;
   const msgEl = document.createElement('div');
   msgEl.classList.add('message', 'close');
   msgEl.textContent = `💡 ${data.text}`;
@@ -592,6 +630,7 @@ socket.on('close_guess_notice', (data) => {
 });
 
 socket.on('chat_message', (data) => {
+  if (!chatMessages) return;
   const msgEl = document.createElement('div');
   msgEl.classList.add('message');
 
