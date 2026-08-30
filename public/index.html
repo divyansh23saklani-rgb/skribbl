@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
   <title>Skribbl Clone</title>
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
   <!-- 1. Landing Screen -->
@@ -19,11 +19,11 @@
       </div>
 
       <div class="lobby-actions">
-        <button id="createRoomBtn" class="lobby-btn primary-btn">Create Private Room</button>
+        <button id="createRoomBtn" class="lobby-btn primary-btn" type="button">Create Private Room</button>
         <div class="divider"><span>OR</span></div>
         <div class="join-box">
           <input type="text" id="roomCodeInput" placeholder="Room Code" maxlength="10" />
-          <button id="joinRoomBtn" class="lobby-btn secondary-btn">Join Room</button>
+          <button id="joinRoomBtn" class="lobby-btn secondary-btn" type="button">Join Room</button>
         </div>
       </div>
     </div>
@@ -34,7 +34,7 @@
     <div class="lobby-card wide-card">
       <div class="waiting-header">
         <h2>Room: <span id="waitingRoomId">------</span></h2>
-        <button id="lobbyCopyInviteBtn" class="copy-btn">📋 Copy Link</button>
+        <button id="lobbyCopyInviteBtn" class="copy-btn" type="button">📋 Copy Link</button>
       </div>
 
       <div class="waiting-body">
@@ -45,6 +45,15 @@
 
         <div class="waiting-settings-section">
           <h3>Game Settings</h3>
+
+          <div class="setting-item">
+            <label for="difficultySetting">Difficulty Mode</label>
+            <select id="difficultySetting" class="setting-select">
+              <option value="easy">🟢 Easy (Simple & Common)</option>
+              <option value="medium" selected>🟡 Medium (Standard)</option>
+              <option value="hard">🔴 Hard (Abstract & Multi-word)</option>
+            </select>
+          </div>
           
           <div class="setting-item">
             <label for="drawTimeSetting">Draw Time</label>
@@ -79,7 +88,7 @@
           </div>
 
           <div class="host-status-box" id="hostStatusBox">
-            <button id="startGameBtn" class="lobby-btn primary-btn">Start Game</button>
+            <button id="startGameBtn" class="lobby-btn primary-btn" type="button">Start Game</button>
             <div id="guestWaitNotice" class="guest-notice hidden">Waiting for host to start...</div>
           </div>
         </div>
@@ -115,7 +124,7 @@
       <div class="timer-badge" id="timerDisplay">60s</div>
       <div class="word-hint-display" id="wordHint">Waiting...</div>
       <div class="drawer-status" id="drawerStatus">Connecting...</div>
-      <button id="copyInviteBtn" title="Copy Link" class="copy-btn">📋 Link</button>
+      <button id="copyInviteBtn" title="Copy Link" class="copy-btn" type="button">📋 Link</button>
     </div>
 
     <!-- Center: Canvas Area -->
@@ -182,6 +191,6 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js?v=12"></script>
+  <script src="script.js?v=13"></script>
 </body>
 </html>
