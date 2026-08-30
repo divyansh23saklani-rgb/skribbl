@@ -34,12 +34,27 @@ const rooms = {};
 
 // Helper: Generates masked hint with exact word spaces (e.g. "_ _ _   _ _ _ _")
 function getMaskedHint(word, revealedIndices = new Set()) {
-  return word.split('').map((char, index) => {
-    if (char === ' ') return '   '; // Visible 3-space gap
-    if (char === '-') return '-';    // Always show hyphen
-    if (revealedIndices.has(index)) return char.toUpperCase();
-    return '_';
-  }).join(' ');
+  const wordParts = word.split(' ');
+  let globalCharIdx = 0;
+
+  const maskedWords = wordParts.map((part) => {
+    const chars = [];
+    for (let i = 0; i < part.length; i++) {
+      const char = part[i];
+      // If it's a special character (e.g. -, ., /), show it directly
+      if (!/[a-zA-Z0-9]/.test(char)) {
+        chars.push(char);
+      } else if (revealedIndices.has(globalCharIdx)) {
+        chars.push(char.toUpperCase());
+      } else {
+        chars.push('_');
+      }
+      globalCharIdx++;
+    }
+    globalCharIdx++; // Account for the space between words
+    return chars.join(' ');
+  });
+  return maskedWords.join('&nbsp;&nbsp;&nbsp;&nbsp;');
 }
 
 // Helper: Pick 3 distinct words according to room difficulty
@@ -203,55 +218,57 @@ io.on('connection', (socket) => {
   });
 
  function beginDrawingPhase(rId, word) {
-    const room = rooms[rId];
-    if (!room) return;
+  const room = rooms[rId];
+  if (!room) return;
 
-    room.currentWord = word;
-    room.revealedIndices = new Set();
-    const currentDrawer = room.players[room.drawerIndex];
+  room.currentWord = word;
+  room.revealedIndices = new Set();
+  const currentDrawer = room.players[room.drawerIndex];
 
-    let drawTimeLeft = room.settings.drawTime;
-    const initialHint = getMaskedHint(word, room.revealedIndices);
+  let drawTimeLeft = room.settings.drawTime;
+  const initialHint = getMaskedHint(word, room.revealedIndices);
 
-    io.to(rId).emit('round_start', {
-      drawerId: currentDrawer.id,
-      drawerName: currentDrawer.name,
-      hint: initialHint,
-      currentRound: room.currentRound,
-      totalRounds: room.settings.rounds
-    });
+  io.to(rId).emit('round_start', {
+    drawerId: currentDrawer.id,
+    drawerName: currentDrawer.name,
+    hint: initialHint,
+    currentRound: room.currentRound,
+    totalRounds: room.settings.rounds
+  });
 
-    io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
+  io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
 
-    // Periodic hint letter reveals (strictly excludes spaces AND hyphens)
-    const lettersOnly = word
-      .split('')
-      .map((c, i) => (c !== ' ' && c !== '-' ? i : null))
-      .filter((i) => i !== null);
-
-    const maxHints = Math.max(1, Math.floor(lettersOnly.length / 3));
-
-    room.hintInterval = setInterval(() => {
-      if (room.revealedIndices.size < maxHints && drawTimeLeft > 10) {
-        const unrevealed = lettersOnly.filter((i) => !room.revealedIndices.has(i));
-        if (unrevealed.length > 0) {
-          const randIdx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-          room.revealedIndices.add(randIdx);
-          const updatedHint = getMaskedHint(word, room.revealedIndices);
-          io.to(rId).emit('hint_update', { hint: updatedHint });
-        }
-      }
-    }, Math.floor((room.settings.drawTime * 1000) / (maxHints + 1)));
-
-    room.turnTimer = setInterval(() => {
-      drawTimeLeft--;
-      io.to(rId).emit('timer_update', { timeLeft: drawTimeLeft });
-
-      if (drawTimeLeft <= 0) {
-        endTurn(rId, `Time's up! The word was: ${room.currentWord}`);
-      }
-    }, 1000);
+  // Only allow actual alphanumeric letters into the hint reveal pool
+  const lettersOnly = [];
+  for (let i = 0; i < word.length; i++) {
+    if (/[a-zA-Z0-9]/.test(word[i])) {
+      lettersOnly.push(i);
+    }
   }
+
+  const maxHints = Math.max(1, Math.floor(lettersOnly.length / 3));
+
+  room.hintInterval = setInterval(() => {
+    if (room.revealedIndices.size < maxHints && drawTimeLeft > 10) {
+      const unrevealed = lettersOnly.filter((i) => !room.revealedIndices.has(i));
+      if (unrevealed.length > 0) {
+        const randIdx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+        room.revealedIndices.add(randIdx);
+        const updatedHint = getMaskedHint(word, room.revealedIndices);
+        io.to(rId).emit('hint_update', { hint: updatedHint });
+      }
+    }
+  }, Math.floor((room.settings.drawTime * 1000) / (maxHints + 1)));
+
+  room.turnTimer = setInterval(() => {
+    drawTimeLeft--;
+    io.to(rId).emit('timer_update', { timeLeft: drawTimeLeft });
+
+    if (drawTimeLeft <= 0) {
+      endTurn(rId, `Time's up! The word was: ${room.currentWord}`);
+    }
+  }, 1000);
+}
   function endTurn(rId, reason) {
     const room = rooms[rId];
     if (!room) return;
