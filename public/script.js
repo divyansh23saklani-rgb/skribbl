@@ -12,6 +12,7 @@ const waitingRoomId = document.getElementById('waitingRoomId');
 const waitingPlayerCount = document.getElementById('waitingPlayerCount');
 const waitingPlayerList = document.getElementById('waitingPlayerList');
 const lobbyCopyInviteBtn = document.getElementById('lobbyCopyInviteBtn');
+const difficultySetting = document.getElementById('difficultySetting');
 const drawTimeSetting = document.getElementById('drawTimeSetting');
 const selectionTimeSetting = document.getElementById('selectionTimeSetting');
 const roundsSetting = document.getElementById('roundsSetting');
@@ -62,7 +63,7 @@ let canDraw = false;
 let currentRoomId = '';
 let isHost = false;
 
-// Safe Sound Effects Engine (Graceful fallback if audio files are missing)
+// Safe Sound Effects Engine
 const safeAudio = (src) => {
   try {
     const a = new Audio(encodeURI(src));
@@ -187,10 +188,12 @@ function emitSettingsUpdate() {
   socket.emit('update_settings', {
     drawTime: drawTimeSetting ? drawTimeSetting.value : 60,
     selectionTime: selectionTimeSetting ? selectionTimeSetting.value : 10,
-    rounds: roundsSetting ? roundsSetting.value : 3
+    rounds: roundsSetting ? roundsSetting.value : 3,
+    difficulty: difficultySetting ? difficultySetting.value : 'medium'
   });
 }
 
+if (difficultySetting) difficultySetting.addEventListener('change', emitSettingsUpdate);
 if (drawTimeSetting) drawTimeSetting.addEventListener('change', emitSettingsUpdate);
 if (selectionTimeSetting) selectionTimeSetting.addEventListener('change', emitSettingsUpdate);
 if (roundsSetting) roundsSetting.addEventListener('change', emitSettingsUpdate);
@@ -214,6 +217,10 @@ socket.on('lobby_state_update', (data) => {
     });
   }
 
+  if (difficultySetting && data.settings.difficulty) {
+    difficultySetting.value = data.settings.difficulty;
+    difficultySetting.disabled = !isHost;
+  }
   if (drawTimeSetting) {
     drawTimeSetting.value = data.settings.drawTime;
     drawTimeSetting.disabled = !isHost;
