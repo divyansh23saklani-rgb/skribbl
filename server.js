@@ -35,7 +35,8 @@ const rooms = {};
 // Helper: Generates masked hint with exact word spaces (e.g. "_ _ _   _ _ _ _")
 function getMaskedHint(word, revealedIndices = new Set()) {
   return word.split('').map((char, index) => {
-    if (char === ' ') return '  '; // triple space for distinct word gap
+    if (char === ' ') return '   '; // Visible 3-space gap
+    if (char === '-') return '-';    // Always show hyphen
     if (revealedIndices.has(index)) return char.toUpperCase();
     return '_';
   }).join(' ');
@@ -201,7 +202,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  function beginDrawingPhase(rId, word) {
+ function beginDrawingPhase(rId, word) {
     const room = rooms[rId];
     if (!room) return;
 
@@ -222,13 +223,17 @@ io.on('connection', (socket) => {
 
     io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
 
-    // Periodic hint letter reveals
-    const lettersOnly = word.split('').map((c, i) => (c !== ' ' ? i : null)).filter(i => i !== null);
+    // Periodic hint letter reveals (strictly excludes spaces AND hyphens)
+    const lettersOnly = word
+      .split('')
+      .map((c, i) => (c !== ' ' && c !== '-' ? i : null))
+      .filter((i) => i !== null);
+
     const maxHints = Math.max(1, Math.floor(lettersOnly.length / 3));
 
     room.hintInterval = setInterval(() => {
       if (room.revealedIndices.size < maxHints && drawTimeLeft > 10) {
-        const unrevealed = lettersOnly.filter(i => !room.revealedIndices.has(i));
+        const unrevealed = lettersOnly.filter((i) => !room.revealedIndices.has(i));
         if (unrevealed.length > 0) {
           const randIdx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
           room.revealedIndices.add(randIdx);
@@ -247,7 +252,6 @@ io.on('connection', (socket) => {
       }
     }, 1000);
   }
-
   function endTurn(rId, reason) {
     const room = rooms[rId];
     if (!room) return;
