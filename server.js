@@ -32,7 +32,27 @@ try {
 
 const rooms = {};
 
-// Helper: Generates masked hint with exact word spaces (e.g. "_ _ _   _ _ _ _")
+// Helper: Levenshtein distance algorithm to detect 1-letter typos for "You are close!"
+function getLevenshteinDistance(a, b) {
+  if (a.length < b.length) return getLevenshteinDistance(b, a);
+  if (b.length === 0) return a.length;
+
+  let prevRow = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 0; i < a.length; i++) {
+    const currRow = [i + 1];
+    for (let j = 0; j < b.length; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      currRow.push(Math.min(
+        currRow[j] + 1,       // Insertion
+        prevRow[j + 1] + 1,   // Deletion
+        prevRow[j] + cost     // Substitution
+      ));
+    }
+    prevRow = currRow;
+  }
+  return prevRow[b.length];
+}
+
 // Helper: Generates masked hint displaying hyphens explicitly and wide Unicode gaps between words
 function getMaskedHint(word, revealedIndices = new Set()) {
   const wordParts = word.split(' ');
@@ -58,6 +78,7 @@ function getMaskedHint(word, revealedIndices = new Set()) {
   // Real Unicode non-breaking spaces (won't render as literal text)
   return maskedWords.join('\u00A0\u00A0\u00A0\u00A0');
 }
+
 // Helper: Pick 3 distinct words according to room difficulty
 function pickThreeWords(difficulty = 'medium') {
   let list = wordDatabase[difficulty] || wordDatabase.medium;
@@ -218,58 +239,59 @@ io.on('connection', (socket) => {
     }
   });
 
- function beginDrawingPhase(rId, word) {
-  const room = rooms[rId];
-  if (!room) return;
+  function beginDrawingPhase(rId, word) {
+    const room = rooms[rId];
+    if (!room) return;
 
-  room.currentWord = word;
-  room.revealedIndices = new Set();
-  const currentDrawer = room.players[room.drawerIndex];
+    room.currentWord = word;
+    room.revealedIndices = new Set();
+    const currentDrawer = room.players[room.drawerIndex];
 
-  let drawTimeLeft = room.settings.drawTime;
-  const initialHint = getMaskedHint(word, room.revealedIndices);
+    let drawTimeLeft = room.settings.drawTime;
+    const initialHint = getMaskedHint(word, room.revealedIndices);
 
-  io.to(rId).emit('round_start', {
-    drawerId: currentDrawer.id,
-    drawerName: currentDrawer.name,
-    hint: initialHint,
-    currentRound: room.currentRound,
-    totalRounds: room.settings.rounds
-  });
+    io.to(rId).emit('round_start', {
+      drawerId: currentDrawer.id,
+      drawerName: currentDrawer.name,
+      hint: initialHint,
+      currentRound: room.currentRound,
+      totalRounds: room.settings.rounds
+    });
 
-  io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
+    io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
 
-  // Only allow actual alphanumeric letters into the hint reveal pool
-  const lettersOnly = [];
-  for (let i = 0; i < word.length; i++) {
-    if (/[a-zA-Z0-9]/.test(word[i])) {
-      lettersOnly.push(i);
-    }
-  }
-
-  const maxHints = Math.max(1, Math.floor(lettersOnly.length / 3));
-
-  room.hintInterval = setInterval(() => {
-    if (room.revealedIndices.size < maxHints && drawTimeLeft > 10) {
-      const unrevealed = lettersOnly.filter((i) => !room.revealedIndices.has(i));
-      if (unrevealed.length > 0) {
-        const randIdx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-        room.revealedIndices.add(randIdx);
-        const updatedHint = getMaskedHint(word, room.revealedIndices);
-        io.to(rId).emit('hint_update', { hint: updatedHint });
+    // Only allow actual alphanumeric letters into the hint reveal pool
+    const lettersOnly = [];
+    for (let i = 0; i < word.length; i++) {
+      if (/[a-zA-Z0-9]/.test(word[i])) {
+        lettersOnly.push(i);
       }
     }
-  }, Math.floor((room.settings.drawTime * 1000) / (maxHints + 1)));
 
-  room.turnTimer = setInterval(() => {
-    drawTimeLeft--;
-    io.to(rId).emit('timer_update', { timeLeft: drawTimeLeft });
+    const maxHints = Math.max(1, Math.floor(lettersOnly.length / 3));
 
-    if (drawTimeLeft <= 0) {
-      endTurn(rId, `Time's up! The word was: ${room.currentWord}`);
-    }
-  }, 1000);
-}
+    room.hintInterval = setInterval(() => {
+      if (room.revealedIndices.size < maxHints && drawTimeLeft > 10) {
+        const unrevealed = lettersOnly.filter((i) => !room.revealedIndices.has(i));
+        if (unrevealed.length > 0) {
+          const randIdx = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+          room.revealedIndices.add(randIdx);
+          const updatedHint = getMaskedHint(word, room.revealedIndices);
+          io.to(rId).emit('hint_update', { hint: updatedHint });
+        }
+      }
+    }, Math.floor((room.settings.drawTime * 1000) / (maxHints + 1)));
+
+    room.turnTimer = setInterval(() => {
+      drawTimeLeft--;
+      io.to(rId).emit('timer_update', { timeLeft: drawTimeLeft });
+
+      if (drawTimeLeft <= 0) {
+        endTurn(rId, `Time's up! The word was: ${room.currentWord}`);
+      }
+    }, 1000);
+  }
+
   function endTurn(rId, reason) {
     const room = rooms[rId];
     if (!room) return;
@@ -289,32 +311,32 @@ io.on('connection', (socket) => {
     }, 4000);
   }
 
- function endGame(rId) {
-  const room = rooms[rId];
-  if (!room) return;
+  function endGame(rId) {
+    const room = rooms[rId];
+    if (!room) return;
 
-  clearRoomTimers(room);
-  room.gameState = 'GAME_OVER';
+    clearRoomTimers(room);
+    room.gameState = 'GAME_OVER';
 
-  const winners = [...room.players].sort((a, b) => b.score - a.score);
-  io.to(rId).emit('game_over', { winners });
+    const winners = [...room.players].sort((a, b) => b.score - a.score);
+    io.to(rId).emit('game_over', { winners });
 
-  // Wait 10 seconds (matching the podium countdown), then automatically restart a new game
-  setTimeout(() => {
-    const activeRoom = rooms[rId];
-    if (!activeRoom || activeRoom.players.length === 0) return;
+    // Wait 10 seconds (matching the podium countdown), then automatically restart a new game
+    setTimeout(() => {
+      const activeRoom = rooms[rId];
+      if (!activeRoom || activeRoom.players.length === 0) return;
 
-    // Reset scores, rounds, and drawer index for the new game
-    activeRoom.gameState = 'PLAYING';
-    activeRoom.currentRound = 1;
-    activeRoom.drawerIndex = 0;
-    activeRoom.players.forEach(p => p.score = 0);
+      // Reset scores, rounds, and drawer index for the new game
+      activeRoom.gameState = 'PLAYING';
+      activeRoom.currentRound = 1;
+      activeRoom.drawerIndex = 0;
+      activeRoom.players.forEach(p => p.score = 0);
 
-    // Notify clients that new game is starting
-    io.to(rId).emit('game_started');
-    startTurn(rId);
-  }, 10000);
-}
+      // Notify clients that new game is starting
+      io.to(rId).emit('game_started');
+      startTurn(rId);
+    }, 10000);
+  }
 
   function clearRoomTimers(room) {
     if (room.turnTimer) clearInterval(room.turnTimer);
@@ -332,32 +354,49 @@ io.on('connection', (socket) => {
 
     const currentDrawer = room.players[room.drawerIndex];
 
-    if (room.gameState === 'PLAYING' && room.currentWord && currentDrawer && currentDrawer.id !== socket.id) {
+    if (
+      room.gameState === 'PLAYING' &&
+      room.currentWord &&
+      currentDrawer &&
+      currentDrawer.id !== socket.id
+    ) {
       const cleanGuess = msgText.trim().toLowerCase();
       const targetWord = room.currentWord.trim().toLowerCase();
 
+      // If player already guessed correctly this turn, prevent spoilers
+      if (room.correctGuessers.has(socket.id)) {
+        return;
+      }
+
+      // Exact Match
       if (cleanGuess === targetWord) {
-        if (!room.correctGuessers.has(socket.id)) {
-          room.correctGuessers.add(socket.id);
-          
-          // Score formula based on order and remaining time
-          const pointsAwarded = Math.max(50, 100 + (10 - room.correctGuessers.size) * 10);
-          player.score += pointsAwarded;
-          currentDrawer.score += 25; // Drawer bonus
+        room.correctGuessers.add(socket.id);
+        
+        // Score formula based on order and remaining time
+        const pointsAwarded = Math.max(50, 100 + (10 - room.correctGuessers.size) * 10);
+        player.score += pointsAwarded;
+        currentDrawer.score += 25; // Drawer bonus
 
-          io.to(rId).emit('chat_message', {
-            isCorrect: true,
-            text: `${player.name} guessed the word! (+${pointsAwarded} pts)`
-          });
+        io.to(rId).emit('chat_message', {
+          isCorrect: true,
+          text: `${player.name} guessed the word! (+${pointsAwarded} pts)`
+        });
 
-          broadcastLeaderboard(rId);
+        broadcastLeaderboard(rId);
 
-          // If all non-drawing players have guessed
-          if (room.correctGuessers.size >= room.players.length - 1) {
-            endTurn(rId, `Everyone guessed the word!`);
-          }
+        // If all non-drawing players have guessed
+        if (room.correctGuessers.size >= room.players.length - 1) {
+          endTurn(rId, `Everyone guessed the word!`);
         }
         return;
+      }
+
+      // Close Guess (Typo / Levenshtein distance === 1)
+      const distance = getLevenshteinDistance(cleanGuess, targetWord);
+      if (distance === 1 && targetWord.length > 2) {
+        socket.emit('close_guess_notice', {
+          text: `'${msgText.trim()}' is very close!`
+        });
       }
     }
 
