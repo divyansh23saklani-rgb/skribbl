@@ -33,6 +33,7 @@ try {
 const rooms = {};
 
 // Helper: Generates masked hint with exact word spaces (e.g. "_ _ _   _ _ _ _")
+// Helper: Generates masked hint displaying hyphens explicitly and wide Unicode gaps between words
 function getMaskedHint(word, revealedIndices = new Set()) {
   const wordParts = word.split(' ');
   let globalCharIdx = 0;
@@ -41,9 +42,8 @@ function getMaskedHint(word, revealedIndices = new Set()) {
     const chars = [];
     for (let i = 0; i < part.length; i++) {
       const char = part[i];
-      // If it's a special character (e.g. -, ., /), show it directly
       if (!/[a-zA-Z0-9]/.test(char)) {
-        chars.push(char);
+        chars.push(char); // Keep -, ., /, etc. visible
       } else if (revealedIndices.has(globalCharIdx)) {
         chars.push(char.toUpperCase());
       } else {
@@ -54,9 +54,10 @@ function getMaskedHint(word, revealedIndices = new Set()) {
     globalCharIdx++; // Account for the space between words
     return chars.join(' ');
   });
-  return maskedWords.join('&nbsp;&nbsp;&nbsp;&nbsp;');
-}
 
+  // Real Unicode non-breaking spaces (won't render as literal text)
+  return maskedWords.join('\u00A0\u00A0\u00A0\u00A0');
+}
 // Helper: Pick 3 distinct words according to room difficulty
 function pickThreeWords(difficulty = 'medium') {
   let list = wordDatabase[difficulty] || wordDatabase.medium;
