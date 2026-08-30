@@ -528,8 +528,6 @@ socket.on('round_start', (data) => {
   redoStack = [];
 
   if (drawerStatus) drawerStatus.textContent = canDraw ? 'You are Drawing!' : `${data.drawerName} is drawing`;
-  
-  // Use innerHTML so the wide spaces render properly
   if (wordHint) wordHint.textContent = data.hint;
 
   if (toolbar) {
@@ -571,10 +569,11 @@ socket.on('round_end', (data) => {
   }
 });
 
-// Game Over Podium
+// Game Over Podium & Auto-Restart Handler
 socket.on('game_over', (data) => {
   if (wordModal) wordModal.classList.add('hidden');
   if (gameOverModal) gameOverModal.classList.remove('hidden');
+  
   if (podiumList) {
     podiumList.innerHTML = '';
     const medals = ['🥇 1st', '🥈 2nd', '🥉 3rd'];
@@ -589,6 +588,8 @@ socket.on('game_over', (data) => {
   }
 
   let count = 10;
+  if (restartTimer) restartTimer.textContent = `New game in ${count}s...`;
+
   const restartInterval = setInterval(() => {
     count--;
     if (restartTimer) restartTimer.textContent = `New game in ${count}s...`;
