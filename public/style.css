@@ -135,10 +135,14 @@ body {
   border: 2px solid #ced6e0;
   border-radius: 6px;
   font-size: 13px;
+  outline: none;
+  background-color: #fff;
+  cursor: pointer;
 }
 
 .setting-select:disabled {
   background: #f1f2f6;
+  cursor: not-allowed;
 }
 
 .host-status-box {
@@ -308,6 +312,12 @@ body {
 .podium-row.rank-2 { background: #dfe4ea; color: #57606f; }
 .podium-row.rank-3 { background: #fad390; color: #e55039; }
 
+.restart-timer {
+  font-size: 13px;
+  font-weight: bold;
+  color: #747d8c;
+}
+
 /* --- MAIN DESKTOP GAME CONTAINER --- */
 .main-container {
   display: flex;
@@ -353,10 +363,11 @@ body {
 
 .word-hint-display {
   font-size: 20px;
-  letter-spacing: 5px;
+  letter-spacing: 4px;
   font-weight: bold;
   color: #ffa502;
   text-transform: uppercase;
+  white-space: pre-wrap; /* Preserves word gaps */
 }
 
 .drawer-status {
@@ -463,6 +474,10 @@ canvas {
   border-radius: 6px;
   display: block;
   touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transform: translateZ(0); /* Hardware accelerated rendering */
 }
 
 /* 3. Bottom Half Split (Leaderboard & Chat) */
@@ -556,7 +571,12 @@ canvas {
 
 .message.system { background: #dfe4ea; font-style: italic; color: #57606f; }
 .message.correct { background: #2ed573; color: white; font-weight: bold; }
-.message.close { background: #fff2cc; color: #d68910; font-weight: bold; }
+.message.close { 
+  background: #fff2cc; 
+  color: #d68910; 
+  font-weight: bold; 
+  border-left: 3px solid #ff9f43; 
+}
 
 /* 4. Bottom Sticky Chat Input Bar */
 .chat-input-area {
@@ -585,7 +605,7 @@ canvas {
   font-size: 14px;
 }
 
-/* --- MOBILE SPECIFIC LAYOUT (Exact Skribbl Screen) --- */
+/* --- MOBILE SPECIFIC LAYOUT --- */
 @media (max-width: 768px) {
   body {
     align-items: flex-start;
@@ -646,7 +666,6 @@ canvas {
     width: 45px;
   }
 
-  /* Bottom Split: Side-by-side leaderboard & chat on phone */
   .bottom-split-section {
     height: 180px;
     gap: 4px;
@@ -659,6 +678,6 @@ canvas {
 
   .chat-input-area input {
     padding: 12px;
-    font-size: 15px; /* Prevents auto-zoom on mobile safari/chrome */
+    font-size: 15px;
   }
 }
