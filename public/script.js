@@ -530,7 +530,7 @@ socket.on('round_start', (data) => {
   if (drawerStatus) drawerStatus.textContent = canDraw ? 'You are Drawing!' : `${data.drawerName} is drawing`;
   
   // Use innerHTML so the wide spaces render properly
-  if (wordHint) wordHint.innerHTML = data.hint;
+  if (wordHint) wordHint.textContent = data.hint;
 
   if (toolbar) {
     toolbar.style.opacity = canDraw ? '1' : '0.4';
@@ -548,7 +548,7 @@ socket.on('drawer_word', (data) => {
 
 socket.on('hint_update', (data) => {
   if (!canDraw && wordHint) {
-    wordHint.innerHTML = data.hint;
+    wordHint.textContent = data.hint;
   }
 });
 
