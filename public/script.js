@@ -528,7 +528,10 @@ socket.on('round_start', (data) => {
   redoStack = [];
 
   if (drawerStatus) drawerStatus.textContent = canDraw ? 'You are Drawing!' : `${data.drawerName} is drawing`;
-  if (wordHint) wordHint.textContent = data.hint;
+  
+  // Use innerHTML so the wide spaces render properly
+  if (wordHint) wordHint.innerHTML = data.hint;
+
   if (toolbar) {
     toolbar.style.opacity = canDraw ? '1' : '0.4';
     toolbar.style.pointerEvents = canDraw ? 'auto' : 'none';
@@ -544,7 +547,9 @@ socket.on('drawer_word', (data) => {
 });
 
 socket.on('hint_update', (data) => {
-  if (!canDraw && wordHint) wordHint.textContent = data.hint;
+  if (!canDraw && wordHint) {
+    wordHint.innerHTML = data.hint;
+  }
 });
 
 socket.on('timer_update', (data) => {
