@@ -289,20 +289,32 @@ io.on('connection', (socket) => {
     }, 4000);
   }
 
-  function endGame(rId) {
-    const room = rooms[rId];
-    if (!room) return;
+ function endGame(rId) {
+  const room = rooms[rId];
+  if (!room) return;
 
-    clearRoomTimers(room);
-    room.gameState = 'LOBBY';
+  clearRoomTimers(room);
+  room.gameState = 'GAME_OVER';
 
-    const winners = [...room.players].sort((a, b) => b.score - a.score);
-    io.to(rId).emit('game_over', { winners });
+  const winners = [...room.players].sort((a, b) => b.score - a.score);
+  io.to(rId).emit('game_over', { winners });
 
-    setTimeout(() => {
-      broadcastLobbyState(rId);
-    }, 10000);
-  }
+  // Wait 10 seconds (matching the podium countdown), then automatically restart a new game
+  setTimeout(() => {
+    const activeRoom = rooms[rId];
+    if (!activeRoom || activeRoom.players.length === 0) return;
+
+    // Reset scores, rounds, and drawer index for the new game
+    activeRoom.gameState = 'PLAYING';
+    activeRoom.currentRound = 1;
+    activeRoom.drawerIndex = 0;
+    activeRoom.players.forEach(p => p.score = 0);
+
+    // Notify clients that new game is starting
+    io.to(rId).emit('game_started');
+    startTurn(rId);
+  }, 10000);
+}
 
   function clearRoomTimers(room) {
     if (room.turnTimer) clearInterval(room.turnTimer);
