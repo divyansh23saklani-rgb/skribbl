@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/ping', (req, res) => res.status(200).send('pong'));
 
-// Load categorized word lists from words.json
+// Default fallbacks if words.json isn't available
 let wordDatabase = {
   easy: ["cat", "dog", "sun", "tree", "car", "apple"],
   medium: ["airplane", "hospital", "guitar", "sandwich", "bicycle"],
@@ -32,7 +32,7 @@ try {
 
 const rooms = {};
 
-// Helper: Levenshtein distance algorithm to detect 1-letter typos for "You are close!"
+// Catch single-letter typos so we can give guessers a hint
 function getLevenshteinDistance(a, b) {
   if (a.length < b.length) return getLevenshteinDistance(b, a);
   if (b.length === 0) return a.length;
@@ -53,7 +53,7 @@ function getLevenshteinDistance(a, b) {
   return prevRow[b.length];
 }
 
-// Helper: Generates masked hint displaying hyphens explicitly and wide Unicode gaps between words
+// Keep hyphens/punctuation legible and pad spaces between words
 function getMaskedHint(word, revealedIndices = new Set()) {
   const wordParts = word.split(' ');
   let globalCharIdx = 0;
@@ -75,11 +75,11 @@ function getMaskedHint(word, revealedIndices = new Set()) {
     return chars.join(' ');
   });
 
-  // Real Unicode non-breaking spaces (won't render as literal text)
+  // Non-breaking spaces keep multi-word gaps visible in HTML
   return maskedWords.join('\u00A0\u00A0\u00A0\u00A0');
 }
 
-// Helper: Pick 3 distinct words according to room difficulty
+// Grab 3 random candidates for the drawer
 function pickThreeWords(difficulty = 'medium') {
   let list = wordDatabase[difficulty] || wordDatabase.medium;
   if (!list || list.length < 3) list = [...wordDatabase.easy, ...wordDatabase.medium, ...wordDatabase.hard];
@@ -102,7 +102,7 @@ io.on('connection', (socket) => {
           drawTime: 60,
           selectionTime: 10,
           rounds: 3,
-          difficulty: 'medium' // Default difficulty
+          difficulty: 'medium' // standard default
         },
         gameState: 'LOBBY',
         currentRound: 1,
@@ -203,13 +203,13 @@ io.on('connection', (socket) => {
 
     broadcastLeaderboard(rId);
 
-    // Notify guessers that drawer is choosing
+    // Tell everyone else who is on the clock
     socket.to(rId).emit('waiting_for_word', {
       drawerName: currentDrawer.name,
       timeLeft
     });
 
-    // Send word choices exclusively to the drawer
+    // Only send word options to the active drawer
     io.to(currentDrawer.id).emit('choose_word_prompt', {
       words: room.wordChoices,
       timeLeft
@@ -221,7 +221,7 @@ io.on('connection', (socket) => {
 
       if (timeLeft <= 0) {
         clearInterval(room.selectionTimer);
-        // Auto-pick first word if drawer didn't choose in time
+        // Drawer ran out of time, pick first option
         beginDrawingPhase(rId, room.wordChoices[0]);
       }
     }, 1000);
@@ -260,7 +260,7 @@ io.on('connection', (socket) => {
 
     io.to(currentDrawer.id).emit('drawer_word', { word: room.currentWord });
 
-    // Only allow actual alphanumeric letters into the hint reveal pool
+    // Don't waste hint reveals on hyphens or punctuation
     const lettersOnly = [];
     for (let i = 0; i < word.length; i++) {
       if (/[a-zA-Z0-9]/.test(word[i])) {
@@ -321,18 +321,18 @@ io.on('connection', (socket) => {
     const winners = [...room.players].sort((a, b) => b.score - a.score);
     io.to(rId).emit('game_over', { winners });
 
-    // Wait 10 seconds (matching the podium countdown), then automatically restart a new game
+    // 10s podium screen before cycling into the next game
     setTimeout(() => {
       const activeRoom = rooms[rId];
       if (!activeRoom || activeRoom.players.length === 0) return;
 
-      // Reset scores, rounds, and drawer index for the new game
+      // Wipe match state for the next match
       activeRoom.gameState = 'PLAYING';
       activeRoom.currentRound = 1;
       activeRoom.drawerIndex = 0;
       activeRoom.players.forEach(p => p.score = 0);
 
-      // Notify clients that new game is starting
+      // Spin up round 1
       io.to(rId).emit('game_started');
       startTurn(rId);
     }, 10000);
@@ -344,7 +344,7 @@ io.on('connection', (socket) => {
     if (room.hintInterval) clearInterval(room.hintInterval);
   }
 
-  // Handle Guessing & Chat
+  // Chat and guess validation
   socket.on('send_message', (msgText) => {
     const rId = findRoomBySocket(socket.id);
     if (!rId) return;
@@ -363,19 +363,19 @@ io.on('connection', (socket) => {
       const cleanGuess = msgText.trim().toLowerCase();
       const targetWord = room.currentWord.trim().toLowerCase();
 
-      // If player already guessed correctly this turn, prevent spoilers
+      // Lock out already-correct players so they don't spoil it
       if (room.correctGuessers.has(socket.id)) {
         return;
       }
 
-      // Exact Match
+      // Exact match
       if (cleanGuess === targetWord) {
         room.correctGuessers.add(socket.id);
         
-        // Score formula based on order and remaining time
+        // Faster guessers grab more points
         const pointsAwarded = Math.max(50, 100 + (10 - room.correctGuessers.size) * 10);
         player.score += pointsAwarded;
-        currentDrawer.score += 25; // Drawer bonus
+        currentDrawer.score += 25; // Tip the drawer for a good clue
 
         io.to(rId).emit('chat_message', {
           isCorrect: true,
@@ -384,14 +384,14 @@ io.on('connection', (socket) => {
 
         broadcastLeaderboard(rId);
 
-        // If all non-drawing players have guessed
+        // Everyone guessed, wrap up the turn early
         if (room.correctGuessers.size >= room.players.length - 1) {
           endTurn(rId, `Everyone guessed the word!`);
         }
         return;
       }
 
-      // Close Guess (Typo / Levenshtein distance === 1)
+      // One letter off, send a nudge
       const distance = getLevenshteinDistance(cleanGuess, targetWord);
       if (distance === 1 && targetWord.length > 2) {
         socket.emit('close_guess_notice', {
@@ -400,14 +400,14 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Normal public message
+    // Regular chat relay
     io.to(rId).emit('chat_message', {
       user: player.name,
       text: msgText
     });
   });
 
-  // Canvas drawing relays
+  // Canvas event relays
   socket.on('draw', (data) => socket.to(findRoomBySocket(socket.id)).emit('draw', data));
   socket.on('flood_fill', (data) => socket.to(findRoomBySocket(socket.id)).emit('flood_fill', data));
   socket.on('restore_canvas_state', (data) => socket.to(findRoomBySocket(socket.id)).emit('restore_canvas_state', data));
@@ -469,6 +469,6 @@ io.on('connection', (socket) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });

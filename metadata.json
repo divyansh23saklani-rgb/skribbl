@@ -1,0 +1,8 @@
+{
+  "name": "Skribbl Clone",
+  "description": "A multiplayer drawing and guessing game with real-time lobbies, canvas drawing tools, and score tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

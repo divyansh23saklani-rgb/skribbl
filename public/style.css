@@ -20,7 +20,7 @@ body {
   display: none !important;
 }
 
-/* Modals & Lobby */
+/* Lobby and match setup modals */
 .lobby-modal {
   position: fixed;
   top: 0;
@@ -241,7 +241,7 @@ body {
 .join-box input { flex: 1; text-transform: uppercase; }
 .join-box button { width: auto; padding: 0 14px; }
 
-/* In-game Overlay Modals */
+/* In-game prompts */
 .word-modal,
 .game-over-modal {
   position: fixed;
@@ -318,7 +318,7 @@ body {
   color: #747d8c;
 }
 
-/* --- MAIN DESKTOP GAME CONTAINER --- */
+/* Desktop arena container */
 .main-container {
   display: flex;
   flex-direction: column;
@@ -331,7 +331,7 @@ body {
   gap: 8px;
 }
 
-/* 1. Header Bar */
+/* Match status header */
 .game-header-bar {
   display: flex;
   justify-content: space-between;
@@ -367,7 +367,7 @@ body {
   font-weight: bold;
   color: #ffa502;
   text-transform: uppercase;
-  white-space: pre-wrap; /* Preserves word gaps */
+  white-space: pre-wrap; /* preserve word spacing */
 }
 
 .drawer-status {
@@ -386,7 +386,7 @@ body {
   font-weight: bold;
 }
 
-/* 2. Canvas & Toolbar */
+/* Canvas viewport and toolbar */
 .canvas-section {
   display: flex;
   flex-direction: column;
@@ -477,10 +477,10 @@ canvas {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  transform: translateZ(0); /* Hardware accelerated rendering */
+  transform: translateZ(0); /* promote to dedicated GPU layer */
 }
 
-/* 3. Bottom Half Split (Leaderboard & Chat) */
+/* Player list and chat split */
 .bottom-split-section {
   display: flex;
   gap: 8px;
@@ -488,7 +488,7 @@ canvas {
   height: 200px;
 }
 
-/* Leaderboard Column */
+/* Roster column */
 .leaderboard-container {
   flex: 1;
   display: flex;
@@ -532,7 +532,7 @@ canvas {
 .player-card.is-you { font-weight: bold; }
 .player-card .player-score { font-weight: bold; color: #2ed573; }
 
-/* Chat Column */
+/* Guess feed column */
 .chat-container {
   flex: 1.2;
   display: flex;
@@ -578,7 +578,7 @@ canvas {
   border-left: 3px solid #ff9f43; 
 }
 
-/* 4. Bottom Sticky Chat Input Bar */
+/* Chat input bar */
 .chat-input-area {
   display: flex;
   border: 2px solid #ddd;
@@ -605,7 +605,7 @@ canvas {
   font-size: 14px;
 }
 
-/* --- MOBILE SPECIFIC LAYOUT --- */
+/* Mobile layout adjustments */
 @media (max-width: 768px) {
   body {
     align-items: flex-start;

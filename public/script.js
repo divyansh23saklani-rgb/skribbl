@@ -1,6 +1,6 @@
 const socket = io();
 
-// 1. Landing & Lobby Elements
+// Lobby screen controls
 const landingModal = document.getElementById('landingModal');
 const usernameInput = document.getElementById('usernameInput');
 const roomCodeInput = document.getElementById('roomCodeInput');
@@ -19,7 +19,7 @@ const roundsSetting = document.getElementById('roundsSetting');
 const startGameBtn = document.getElementById('startGameBtn');
 const guestWaitNotice = document.getElementById('guestWaitNotice');
 
-// 2. Main Game Elements
+// In-game UI headers and status indicators
 const gameScreen = document.getElementById('gameScreen');
 const copyInviteBtn = document.getElementById('copyInviteBtn');
 const roundDisplay = document.getElementById('roundDisplay');
@@ -28,7 +28,7 @@ const wordHint = document.getElementById('wordHint');
 const drawerStatus = document.getElementById('drawerStatus');
 const playerList = document.getElementById('playerList');
 
-// 3. Canvas & Tools
+// Drawing canvas and toolbar buttons
 const canvas = document.getElementById('paintCanvas');
 const ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
 const brushSize = document.getElementById('brushSize');
@@ -41,7 +41,7 @@ const redoBtn = document.getElementById('redoBtn');
 const colorBoxes = document.querySelectorAll('.color-box');
 const toolbar = document.getElementById('toolbar');
 
-// 4. Modals
+// Choice and endgame overlays
 const wordModal = document.getElementById('wordModal');
 const modalTimer = document.getElementById('modalTimer');
 const wordChoicesContainer = document.getElementById('wordChoices');
@@ -49,7 +49,7 @@ const gameOverModal = document.getElementById('gameOverModal');
 const podiumList = document.getElementById('podiumList');
 const restartTimer = document.getElementById('restartTimer');
 
-// 5. Chat Elements
+// Message feed and input form
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatMessages = document.getElementById('chatMessages');
@@ -63,7 +63,7 @@ let canDraw = false;
 let currentRoomId = '';
 let isHost = false;
 
-// Safe Sound Effects Engine
+// Audio helper with graceful failure if blocked by browser autoplay policy
 const safeAudio = (src) => {
   try {
     const a = new Audio(encodeURI(src));
@@ -107,7 +107,7 @@ window.addEventListener('click', () => {
   });
 }, { once: true });
 
-// Undo / Redo Stacks
+// History buffers for stroke rollback
 let undoStack = [];
 let redoStack = [];
 const MAX_HISTORY = 15;
@@ -129,7 +129,7 @@ function restoreCanvasFromDataURL(dataUrl) {
   };
 }
 
-// Check room code in URL parameter
+// Auto-fill room code if joined via shared invite link
 try {
   const urlParams = new URLSearchParams(window.location.search);
   const roomParam = urlParams.get('room');
@@ -159,7 +159,20 @@ if (joinRoomBtn) {
   joinRoomBtn.addEventListener('click', (e) => {
     e.preventDefault();
     const code = roomCodeInput ? roomCodeInput.value.trim() : '';
-    if (!code) return alert('Please enter a room code!');
+    if (!code) {
+      if (roomCodeInput) {
+        roomCodeInput.focus();
+        roomCodeInput.placeholder = 'Enter code first!';
+        roomCodeInput.style.borderColor = '#ef4444';
+        setTimeout(() => {
+          if (roomCodeInput) {
+            roomCodeInput.placeholder = 'Room Code';
+            roomCodeInput.style.borderColor = '';
+          }
+        }, 2000);
+      }
+      return;
+    }
     enterRoom(code);
   });
 }
@@ -250,14 +263,44 @@ socket.on('game_started', () => {
   if (gameScreen) gameScreen.classList.remove('hidden');
 });
 
+function fallbackCopyText(text) {
+  try {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const success = document.execCommand('copy');
+    textArea.remove();
+    return success;
+  } catch (e) {
+    return false;
+  }
+}
+
 function copyInviteLink(btn) {
   if (!btn) return;
   const inviteUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?room=${currentRoomId}`;
-  navigator.clipboard.writeText(inviteUrl).then(() => {
+  const notifySuccess = () => {
     const prev = btn.textContent;
     btn.textContent = '✅ Copied!';
     setTimeout(() => { btn.textContent = prev; }, 2000);
-  }).catch(() => {});
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(inviteUrl).then(notifySuccess).catch(() => {
+      if (fallbackCopyText(inviteUrl)) {
+        notifySuccess();
+      }
+    });
+  } else {
+    if (fallbackCopyText(inviteUrl)) {
+      notifySuccess();
+    }
+  }
 }
 
 if (lobbyCopyInviteBtn) lobbyCopyInviteBtn.addEventListener('click', () => copyInviteLink(lobbyCopyInviteBtn));
@@ -285,7 +328,7 @@ colorBoxes.forEach((box) => {
   });
 });
 
-// Flood Fill Algorithm
+// BFS queue-based paint bucket
 function hexToRgba(hex) {
   let c = hex.replace('#', '');
   if (c.length === 3) c = c.split('').map(x => x + x).join('');
@@ -347,7 +390,7 @@ function floodFill(startX, startY, fillColorHex) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Pointer & Touch Events
+// Unified input normalization for mouse and touch
 function getCanvasPos(e) {
   if (!canvas) return { x: 0, y: 0 };
   const rect = canvas.getBoundingClientRect();
@@ -472,7 +515,7 @@ socket.on('flood_fill', (data) => floodFill(data.x, data.y, data.color));
 socket.on('restore_canvas_state', (dataUrl) => restoreCanvasFromDataURL(dataUrl));
 socket.on('clear', () => { if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height); });
 
-// Turn & Round Listeners
+// Match progression events
 socket.on('round_info', (data) => {
   if (roundDisplay) roundDisplay.textContent = `R ${data.currentRound}/${data.totalRounds}`;
 });
@@ -569,7 +612,7 @@ socket.on('round_end', (data) => {
   }
 });
 
-// Game Over Podium & Auto-Restart Handler
+// Post-match summary and rematch countdown
 socket.on('game_over', (data) => {
   if (wordModal) wordModal.classList.add('hidden');
   if (gameOverModal) gameOverModal.classList.remove('hidden');
@@ -600,7 +643,7 @@ socket.on('game_over', (data) => {
   }, 1000);
 });
 
-// Leaderboard Sync
+// Active roster and score sync
 socket.on('leaderboard_update', (data) => {
   if (!playerList) return;
   playerList.innerHTML = '';
@@ -625,7 +668,7 @@ socket.on('leaderboard_update', (data) => {
   });
 });
 
-// Chat Handlers
+// Guess submission and message dispatch
 if (chatForm) {
   chatForm.addEventListener('submit', (e) => {
     e.preventDefault();

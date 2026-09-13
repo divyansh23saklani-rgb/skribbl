@@ -4,10 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
   <title>Skribbl Clone</title>
+  <meta name="description" content="A multiplayer drawing and guessing game with real-time lobbies, canvas drawing tools, and score tracking." />
+  <meta property="og:title" content="Skribbl Clone" />
+  <meta property="og:description" content="A multiplayer drawing and guessing game with real-time lobbies, canvas drawing tools, and score tracking." />
   <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
-  <!-- 1. Landing Screen -->
+  <!-- Landing and join modal -->
   <div id="landingModal" class="lobby-modal">
     <div class="lobby-card">
       <h1>🎨 Skribbl Clone</h1>
@@ -29,7 +32,7 @@
     </div>
   </div>
 
-  <!-- 2. Room Waiting Lobby Screen -->
+  <!-- Room waiting lobby -->
   <div id="waitingLobbyModal" class="lobby-modal hidden">
     <div class="lobby-card wide-card">
       <div class="waiting-header">
@@ -96,7 +99,7 @@
     </div>
   </div>
 
-  <!-- 3. Word Choice Modal Overlay -->
+  <!-- Word choice prompt -->
   <div id="wordModal" class="word-modal hidden">
     <div class="modal-card">
       <h2>Choose a Word</h2>
@@ -105,7 +108,7 @@
     </div>
   </div>
 
-  <!-- 4. Game Over Podium Modal Overlay -->
+  <!-- Podium and game summary modal -->
   <div id="gameOverModal" class="game-over-modal hidden">
     <div class="podium-card">
       <h2>🏆 Game Over! 🏆</h2>
@@ -115,10 +118,10 @@
     </div>
   </div>
 
-  <!-- 5. Main Game Screen Layout -->
+  <!-- Game arena -->
   <div class="main-container hidden" id="gameScreen">
     
-    <!-- Top Fixed Info Bar -->
+    <!-- Match header metrics -->
     <div class="game-header-bar">
       <div class="round-badge" id="roundDisplay">R 1/3</div>
       <div class="timer-badge" id="timerDisplay">60s</div>
@@ -127,9 +130,9 @@
       <button id="copyInviteBtn" title="Copy Link" class="copy-btn" type="button">📋 Link</button>
     </div>
 
-    <!-- Center: Canvas Area -->
+    <!-- Drawing viewport -->
     <div class="canvas-section">
-      <!-- Toolbar with Fill, Undo, Redo, Colors -->
+      <!-- Drawing controls -->
       <div class="toolbar" id="toolbar">
         <div class="color-palette" id="colorPalette">
           <div class="color-box selected" style="background: #000000;" data-color="#000000"></div>
@@ -168,22 +171,22 @@
       </div>
     </div>
 
-    <!-- Bottom Half Split: Leaderboard (Left) and Chat (Right) -->
+    <!-- Split leaderboard and chat -->
     <div class="bottom-split-section">
-      <!-- Leaderboard -->
+      <!-- Active player roster -->
       <div class="leaderboard-container">
         <div class="leaderboard-header">Players</div>
         <div id="playerList" class="player-list"></div>
       </div>
 
-      <!-- Live Chat Messages -->
+      <!-- Chat feed -->
       <div class="chat-container">
         <div class="chat-header">Live Chat & Guesses</div>
         <div id="chatMessages" class="chat-messages"></div>
       </div>
     </div>
 
-    <!-- Bottom Sticky Guess Input Bar -->
+    <!-- Guess submission -->
     <form id="chatForm" class="chat-input-area" onsubmit="return false;">
       <input type="text" id="chatInput" placeholder="Type your guess here..." autocomplete="off" />
       <button type="submit" id="sendBtn">Send</button>
